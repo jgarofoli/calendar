@@ -20,6 +20,12 @@
   button:hover, button[aria-pressed=true] { border-color: var(--accent); color: var(--accent); }
   .spacer { flex: 1; }
   pre { margin: 0; white-space: pre-wrap; font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+  dialog { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; padding: 1.25rem; width: min(26rem, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog h2 { margin: 0 0 .75rem; font-size: 1.1rem; }
+  dialog label.opt { display: flex; gap: .6rem; align-items: baseline; padding: .4rem 0; cursor: pointer; }
+  dialog code { color: var(--muted); font: 14px ui-monospace, Menlo, Consolas, monospace; }
+  dialog .actions { text-align: right; margin-top: 1rem; }
   #rendered h1 { font-size: 1.6rem; margin: 0 0 .5rem; }
   #rendered h2 { font-size: 1.2rem; margin: 1.5rem 0 .25rem; border-bottom: 1px solid var(--line); }
   #rendered h3 { font-size: .85rem; margin: .75rem 0 .1rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
@@ -34,6 +40,7 @@
     <button id="prev" aria-label="Previous year">&larr;</button>
     <button id="next" aria-label="Next year">&rarr;</button>
     <span class="spacer"></span>
+    <button id="config">Format</button>
     <button id="view" aria-pressed="false">Raw</button>
     <button id="copy">Copy</button>
     <button id="download">Download .md</button>
@@ -41,6 +48,11 @@
   <div id="rendered"></div>
   <pre id="raw" hidden></pre>
 </main>
+<dialog id="dlg">
+  <h2>Day format</h2>
+  <form method="dialog" id="formats"></form>
+  <div class="actions"><button id="close" type="button">Done</button></div>
+</dialog>
 <script>
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -53,6 +65,17 @@ function isoWeek(d) {
   return Math.ceil(((t - yearStart) / 86400000 + 1) / 7);
 }
 
+const pad = n => String(n).padStart(2, "0");
+const MON = MONTHS.map(m => m.slice(0, 3));
+// Each format renders one day: d is a UTC Date, w the ISO week number.
+const FORMATS = [
+  { name: "Short",    fmt: (d, w) => `${DAYS[d.getUTCDay()]} ${pad(d.getUTCDate())}` },
+  { name: "ISO date", fmt: (d, w) => `W${pad(w)} ${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${DAYS[d.getUTCDay()]}` },
+  { name: "Natural",  fmt: (d, w) => `${DAYS[d.getUTCDay()]}, ${MON[d.getUTCMonth()]} ${d.getUTCDate()}` },
+];
+let formatIndex = 0;
+try { formatIndex = Math.min(Math.max(parseInt(localStorage.getItem("format"), 10) || 0, 0), FORMATS.length - 1); } catch {}
+
 // Returns [{h:1|2|3, text}|{day:text}] entries.
 function build(year) {
   const out = [{ h: 1, text: String(year) }];
@@ -64,7 +87,7 @@ function build(year) {
     for (; d.getUTCMonth() === m; d.setUTCDate(d.getUTCDate() + 1)) {
       const w = isoWeek(d);
       if (w !== week) { out.push({ h: 3, text: "Week " + w }); week = w; }
-      out.push({ day: DAYS[d.getUTCDay()] + " " + String(d.getUTCDate()).padStart(2, "0") });
+      out.push({ day: FORMATS[formatIndex].fmt(d, w) });
     }
   }
   return out;
@@ -100,6 +123,24 @@ function setYear(y) { $("year").value = y; render(); }
 
 const q = parseInt(new URLSearchParams(location.search).get("year"), 10);
 $("year").value = q >= 1 && q <= 9999 ? q : new Date().getFullYear();
+const sample = new Date(Date.UTC(2026, 0, 1));
+FORMATS.forEach((f, i) => {
+  const l = document.createElement("label");
+  l.className = "opt";
+  const r = document.createElement("input");
+  r.type = "radio"; r.name = "format"; r.checked = i === formatIndex;
+  r.onchange = () => {
+    formatIndex = i;
+    try { localStorage.setItem("format", i); } catch {}
+    render();
+  };
+  const c = document.createElement("code");
+  c.textContent = f.fmt(sample, 1);
+  l.append(r, f.name + " ", c);
+  $("formats").append(l);
+});
+$("config").onclick = () => $("dlg").showModal();
+$("close").onclick = () => $("dlg").close();
 $("year").addEventListener("input", render);
 $("prev").onclick = () => setYear(+$("year").value - 1);
 $("next").onclick = () => setYear(+$("year").value + 1);
