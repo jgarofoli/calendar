@@ -65,6 +65,7 @@ function isoWeek(d) {
   return Math.ceil(((t - yearStart) / 86400000 + 1) / 7);
 }
 
+const SITE = "https://jgarofoli.github.io/calendar/";
 const pad = n => String(n).padStart(2, "0");
 const MON = MONTHS.map(m => m.slice(0, 3));
 // Each format renders one day: d is a UTC Date, w the ISO week number.
@@ -104,7 +105,8 @@ function build(year) {
 function toMarkdown(entries) {
   let md = "";
   entries.forEach((e, i) => {
-    if (e.gap) md += "\n";
+    if (e.url) md += e.url + "\n";
+    else if (e.gap) md += "\n";
     else if (e.h) md += (i ? "\n" : "") + "#".repeat(e.h) + " " + e.text + "\n" + (e.h < 3 ? "\n" : "");
     else md += e.day + "\n";
   });
@@ -118,11 +120,14 @@ function render() {
   const year = parseInt($("year").value, 10);
   if (!(year >= 1 && year <= 9999)) return;
   const entries = build(year);
+  const url = SITE + "?year=" + year + "&format=" + FORMATS[formatIndex].id;
+  entries.push({ gap: true }, { url });
   markdown = toMarkdown(entries);
   $("raw").textContent = markdown;
   $("rendered").replaceChildren(...entries.map(e => {
     const el = document.createElement(e.h ? "h" + e.h : "div");
-    if (e.gap) el.style.height = ".75rem";
+    if (e.url) { const a = document.createElement("a"); a.href = a.textContent = e.url; el.append(a); }
+    else if (e.gap) el.style.height = ".75rem";
     else el.textContent = e.h ? e.text : e.day;
     return el;
   }));

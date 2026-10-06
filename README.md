@@ -32,6 +32,9 @@ The **Format** button opens a dialog to pick the day format (default: ISO date; 
 Both settings can be set by URL: `?year=2027&format=iso` (`format` is `short`, `iso` or `natural`).
 The URL overrides the remembered choice.
 
+The markdown ends with a link back to the page at
+`https://jgarofoli.github.io/calendar/` with the current year and format as parameters.
+
 No build step, no dependencies.
 
 ## Hosting on GitHub Pages
