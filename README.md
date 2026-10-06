@@ -18,16 +18,19 @@ Weeks that span two months appear under both months.
 
 ## Use
 
-Open `docs/index.html`. Pick a year (defaults to the current year; also settable via `?year=2027`),
+Open `docs/index.html`. Pick a year (defaults to the current year),
 then view the rendered or raw markdown, copy it, or download it as `calendar-<year>.md`.
 
-The **Format** button opens a dialog to pick the day format (remembered in the browser):
+The **Format** button opens a dialog to pick the day format (default: ISO date; remembered in the browser):
 
 | Format   | Example              |
 |----------|----------------------|
 | Short    | `Thu 01`             |
 | ISO date | `W01 2026-01-01 Thu` (no `### Week` headings; weeks are separated by a blank line) |
 | Natural  | `Thu, Jan 1`         |
+
+Both settings can be set by URL: `?year=2027&format=iso` (`format` is `short`, `iso` or `natural`).
+The URL overrides the remembered choice.
 
 No build step, no dependencies.
 

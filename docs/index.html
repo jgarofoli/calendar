@@ -69,12 +69,16 @@ const pad = n => String(n).padStart(2, "0");
 const MON = MONTHS.map(m => m.slice(0, 3));
 // Each format renders one day: d is a UTC Date, w the ISO week number.
 const FORMATS = [
-  { name: "Short",    fmt: (d, w) => `${DAYS[d.getUTCDay()]} ${pad(d.getUTCDate())}` },
-  { name: "ISO date", weekHeadings: false, fmt: (d, w) => `W${pad(w)} ${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${DAYS[d.getUTCDay()]}` },
-  { name: "Natural",  fmt: (d, w) => `${DAYS[d.getUTCDay()]}, ${MON[d.getUTCMonth()]} ${d.getUTCDate()}` },
+  { id: "short", name: "Short",    fmt: (d, w) => `${DAYS[d.getUTCDay()]} ${pad(d.getUTCDate())}` },
+  { id: "iso", name: "ISO date", weekHeadings: false, fmt: (d, w) => `W${pad(w)} ${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${DAYS[d.getUTCDay()]}` },
+  { id: "natural", name: "Natural",  fmt: (d, w) => `${DAYS[d.getUTCDay()]}, ${MON[d.getUTCMonth()]} ${d.getUTCDate()}` },
 ];
-let formatIndex = 0;
-try { formatIndex = Math.min(Math.max(parseInt(localStorage.getItem("format"), 10) || 0, 0), FORMATS.length - 1); } catch {}
+// Precedence: ?format= in the URL, then the saved choice, then ISO.
+const params = new URLSearchParams(location.search);
+let saved = null;
+try { saved = localStorage.getItem("format"); } catch {}
+let formatIndex = [params.get("format"), saved, "iso"]
+  .map(id => FORMATS.findIndex(f => f.id === id)).find(i => i >= 0);
 
 // Returns [{h:1|2|3, text}|{day:text}] entries.
 function build(year) {
@@ -122,12 +126,12 @@ function render() {
     else el.textContent = e.h ? e.text : e.day;
     return el;
   }));
-  history.replaceState(null, "", "?year=" + year);
+  history.replaceState(null, "", "?year=" + year + "&format=" + FORMATS[formatIndex].id);
 }
 
 function setYear(y) { $("year").value = y; render(); }
 
-const q = parseInt(new URLSearchParams(location.search).get("year"), 10);
+const q = parseInt(params.get("year"), 10);
 $("year").value = q >= 1 && q <= 9999 ? q : new Date().getFullYear();
 const sample = new Date(Date.UTC(2026, 0, 1));
 FORMATS.forEach((f, i) => {
@@ -137,7 +141,7 @@ FORMATS.forEach((f, i) => {
   r.type = "radio"; r.name = "format"; r.checked = i === formatIndex;
   r.onchange = () => {
     formatIndex = i;
-    try { localStorage.setItem("format", i); } catch {}
+    try { localStorage.setItem("format", f.id); } catch {}
     render();
   };
   const c = document.createElement("code");
