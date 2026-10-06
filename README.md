@@ -18,7 +18,7 @@ Weeks that span two months appear under both months.
 
 ## Use
 
-Open `index.html`. Pick a year (defaults to the current year; also settable via `?year=2027`),
+Open `docs/index.html`. Pick a year (defaults to the current year; also settable via `?year=2027`),
 then view the rendered or raw markdown, copy it, or download it as `calendar-<year>.md`.
 
 The **Format** button opens a dialog to pick the day format (remembered in the browser):
@@ -33,4 +33,4 @@ No build step, no dependencies.
 
 ## Hosting on GitHub Pages
 
-Push the repo, then Settings → Pages → deploy from the branch root.
+Push the repo, then Settings → Pages → deploy from the branch, folder `/docs`. Only `docs/` is served, not the whole repo.
