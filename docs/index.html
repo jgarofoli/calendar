@@ -108,7 +108,7 @@ function toMarkdown(entries) {
     if (e.url) md += e.url + "\n";
     else if (e.gap) md += "\n";
     else if (e.h) md += (i ? "\n" : "") + "#".repeat(e.h) + " " + e.text + "\n" + (e.h < 3 ? "\n" : "");
-    else md += e.day + "\n";
+    else md += e.day + "  \n"; // two trailing spaces = markdown hard line break
   });
   return md.replace(/\n{3,}/g, "\n\n");
 }
