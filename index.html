@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Linear Calendar</title>
+<style>
+  :root { --bg: #fff; --fg: #1c1c1e; --muted: #6b6b70; --line: #d8d8dc; --accent: #0a60d6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17171a; --fg: #ececf0; --muted: #9a9aa2; --line: #36363c; --accent: #6aa5ff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 42rem; margin: 0 auto; padding: 1rem 16px 3rem; }
+  .bar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: 1rem; }
+  .bar label { color: var(--muted); }
+  input, button, select { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: .35rem .6rem; }
+  input[type=number] { width: 6rem; }
+  button { cursor: pointer; }
+  button:hover, button[aria-pressed=true] { border-color: var(--accent); color: var(--accent); }
+  .spacer { flex: 1; }
+  pre { margin: 0; white-space: pre-wrap; font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+  #rendered h1 { font-size: 1.6rem; margin: 0 0 .5rem; }
+  #rendered h2 { font-size: 1.2rem; margin: 1.5rem 0 .25rem; border-bottom: 1px solid var(--line); }
+  #rendered h3 { font-size: .85rem; margin: .75rem 0 .1rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  #rendered div { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<main>
+  <div class="bar">
+    <label for="year">Year</label>
+    <input id="year" type="number" min="1" max="9999" step="1">
+    <button id="prev" aria-label="Previous year">&larr;</button>
+    <button id="next" aria-label="Next year">&rarr;</button>
+    <span class="spacer"></span>
+    <button id="view" aria-pressed="false">Raw</button>
+    <button id="copy">Copy</button>
+    <button id="download">Download .md</button>
+  </div>
+  <div id="rendered"></div>
+  <pre id="raw" hidden></pre>
+</main>
+<script>
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+// ISO 8601 week number (weeks start Monday; week 1 contains Jan 4th).
+function isoWeek(d) {
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+  const yearStart = Date.UTC(t.getUTCFullYear(), 0, 1);
+  return Math.ceil(((t - yearStart) / 86400000 + 1) / 7);
+}
+
+// Returns [{h:1|2|3, text}|{day:text}] entries.
+function build(year) {
+  const out = [{ h: 1, text: String(year) }];
+  for (let m = 0; m < 12; m++) {
+    out.push({ h: 2, text: MONTHS[m] });
+    let week = null;
+    const d = new Date(Date.UTC(year, m, 1));
+    d.setUTCFullYear(year); // years 0-99 would otherwise map to 1900s
+    for (; d.getUTCMonth() === m; d.setUTCDate(d.getUTCDate() + 1)) {
+      const w = isoWeek(d);
+      if (w !== week) { out.push({ h: 3, text: "Week " + w }); week = w; }
+      out.push({ day: DAYS[d.getUTCDay()] + " " + String(d.getUTCDate()).padStart(2, "0") });
+    }
+  }
+  return out;
+}
+
+function toMarkdown(entries) {
+  let md = "";
+  entries.forEach((e, i) => {
+    if (e.h) md += (i ? "\n" : "") + "#".repeat(e.h) + " " + e.text + "\n" + (e.h < 3 ? "\n" : "");
+    else md += e.day + "\n";
+  });
+  return md.replace(/\n{3,}/g, "\n\n");
+}
+
+const $ = id => document.getElementById(id);
+let markdown = "";
+
+function render() {
+  const year = parseInt($("year").value, 10);
+  if (!(year >= 1 && year <= 9999)) return;
+  const entries = build(year);
+  markdown = toMarkdown(entries);
+  $("raw").textContent = markdown;
+  $("rendered").replaceChildren(...entries.map(e => {
+    const el = document.createElement(e.h ? "h" + e.h : "div");
+    el.textContent = e.h ? e.text : e.day;
+    return el;
+  }));
+  history.replaceState(null, "", "?year=" + year);
+}
+
+function setYear(y) { $("year").value = y; render(); }
+
+const q = parseInt(new URLSearchParams(location.search).get("year"), 10);
+$("year").value = q >= 1 && q <= 9999 ? q : new Date().getFullYear();
+$("year").addEventListener("input", render);
+$("prev").onclick = () => setYear(+$("year").value - 1);
+$("next").onclick = () => setYear(+$("year").value + 1);
+$("view").onclick = () => {
+  const raw = $("raw").hidden;
+  $("raw").hidden = !raw; $("rendered").hidden = raw;
+  $("view").textContent = raw ? "Rendered" : "Raw";
+  $("view").setAttribute("aria-pressed", raw);
+};
+$("copy").onclick = async () => {
+  try { await navigator.clipboard.writeText(markdown); $("copy").textContent = "Copied"; }
+  catch { $("copy").textContent = "Copy failed"; }
+  setTimeout(() => $("copy").textContent = "Copy", 1500);
+};
+$("download").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([markdown], { type: "text/markdown" }));
+  a.download = "calendar-" + $("year").value + ".md";
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+render();
+</script>
+</body>
+</html>
