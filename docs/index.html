@@ -70,7 +70,7 @@ const MON = MONTHS.map(m => m.slice(0, 3));
 // Each format renders one day: d is a UTC Date, w the ISO week number.
 const FORMATS = [
   { name: "Short",    fmt: (d, w) => `${DAYS[d.getUTCDay()]} ${pad(d.getUTCDate())}` },
-  { name: "ISO date", fmt: (d, w) => `W${pad(w)} ${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${DAYS[d.getUTCDay()]}` },
+  { name: "ISO date", weekHeadings: false, fmt: (d, w) => `W${pad(w)} ${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${DAYS[d.getUTCDay()]}` },
   { name: "Natural",  fmt: (d, w) => `${DAYS[d.getUTCDay()]}, ${MON[d.getUTCMonth()]} ${d.getUTCDate()}` },
 ];
 let formatIndex = 0;
@@ -86,7 +86,11 @@ function build(year) {
     d.setUTCFullYear(year); // years 0-99 would otherwise map to 1900s
     for (; d.getUTCMonth() === m; d.setUTCDate(d.getUTCDate() + 1)) {
       const w = isoWeek(d);
-      if (w !== week) { out.push({ h: 3, text: "Week " + w }); week = w; }
+      if (w !== week) {
+        if (FORMATS[formatIndex].weekHeadings !== false) out.push({ h: 3, text: "Week " + w });
+        else if (week !== null) out.push({ gap: true }); // blank line between weeks
+        week = w;
+      }
       out.push({ day: FORMATS[formatIndex].fmt(d, w) });
     }
   }
@@ -96,7 +100,8 @@ function build(year) {
 function toMarkdown(entries) {
   let md = "";
   entries.forEach((e, i) => {
-    if (e.h) md += (i ? "\n" : "") + "#".repeat(e.h) + " " + e.text + "\n" + (e.h < 3 ? "\n" : "");
+    if (e.gap) md += "\n";
+    else if (e.h) md += (i ? "\n" : "") + "#".repeat(e.h) + " " + e.text + "\n" + (e.h < 3 ? "\n" : "");
     else md += e.day + "\n";
   });
   return md.replace(/\n{3,}/g, "\n\n");
@@ -113,7 +118,8 @@ function render() {
   $("raw").textContent = markdown;
   $("rendered").replaceChildren(...entries.map(e => {
     const el = document.createElement(e.h ? "h" + e.h : "div");
-    el.textContent = e.h ? e.text : e.day;
+    if (e.gap) el.style.height = ".75rem";
+    else el.textContent = e.h ? e.text : e.day;
     return el;
   }));
   history.replaceState(null, "", "?year=" + year);

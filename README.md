@@ -26,7 +26,7 @@ The **Format** button opens a dialog to pick the day format (remembered in the b
 | Format   | Example              |
 |----------|----------------------|
 | Short    | `Thu 01`             |
-| ISO date | `W01 2026-01-01 Thu` |
+| ISO date | `W01 2026-01-01 Thu` (no `### Week` headings; weeks are separated by a blank line) |
 | Natural  | `Thu, Jan 1`         |
 
 No build step, no dependencies.
