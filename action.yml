@@ -1,0 +1,19 @@
+name: Calendar lint
+description: >
+  Lint the calendar files in the repository root (TOOLS.md 8.3). Fixes safe
+  findings with a follow-up commit to main, keeps an issue titled "Calendar
+  lint findings" for the rest, and fails while anything is left.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PYTHONPATH: ${{ github.action_path }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        python3 -m calmd.action

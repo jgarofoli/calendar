@@ -1,0 +1,19 @@
+# systemd *user* unit for calsd. Installed by deploy/deploy.sh into
+# ~/.config/systemd/user/; manage with `systemctl --user ... calsd`.
+# Settings are in ~/.config/calsd/env (TOOLS.md 2.3).
+[Unit]
+Description=calsd - calendar editor
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=CALSD_HOST=127.0.0.1 CALSD_PORT=8642
+EnvironmentFile=%h/.config/calsd/env
+WorkingDirectory=%h/.local/share/calsd/app
+ExecStart=/usr/bin/python3 -m calmd.server --data %h/.local/share/calsd/data --host ${CALSD_HOST} --port ${CALSD_PORT}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

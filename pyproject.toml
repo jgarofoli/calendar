@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "calmd"
+version = "1.4.0"
+description = "Lint, format, and edit plain-text calendar files (SPEC.md)"
+readme = "README.md"
+requires-python = ">=3.8"
+
+[project.urls]
+Homepage = "https://github.com/jgarofoli/calendar"
+
+[project.scripts]
+calfmt = "calmd.calfmt:main"
+calsd = "calmd.server:main"
+
+[tool.setuptools]
+packages = ["calmd"]
+
+[tool.setuptools.package-data]
+calmd = ["web/*.html"]

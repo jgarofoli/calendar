@@ -1,42 +1,57 @@
 # Linear Calendar
 
-A single static web page that generates a linear calendar for a chosen year as markdown.
-Days are grouped by month and ISO week (Monday start), one line per day.
+A plain-text calendar: one Markdown file per year, one line per day, events
+written beside the day they happen.
 
 ```
-# 2026
-
-## January
-
-### Week 1
-Thu 01
-Fri 02
-...
+W42 2026-10-15 Thu 🦷 Dentist @ 10␣␣
+                      - Dr. Lee, 450 Main St, Suite 200␣␣
+                   🏋️ Gym @ 4␣␣
+W42 2026-10-16 Fri␣␣
 ```
 
-Weeks that span two months appear under both months.
+This repository holds:
 
-## Use
+- [`SPEC.md`](SPEC.md): the Calendar File Format, version 1.0.
+- [`docs/index.html`](docs/index.html): the generator page, which makes an
+  empty year to fill in. Live at <https://jgarofoli.github.io/calendar/>.
+- [`calmd/`](calmd): tools for the format, described in [`TOOLS.md`](TOOLS.md):
+  - `calfmt` lints and formats files, starts new years, and copies annual
+    events such as birthdays into them;
+  - a GitHub Action ([`action.yml`](action.yml)) that lints every push and
+    fixes what is safe to fix;
+  - `calsd`, a small self-hosted web editor that commits each edit to git.
 
-Open `docs/index.html`. Pick a year (defaults to the current year),
-then view the rendered or raw markdown, copy it, or download it as `calendar-<year>.md`.
+A calendar lives in a repository of its own and uses a tagged release of
+these tools. Python 3.8 or later, standard library only.
 
-The **Format** button opens a dialog to pick the day format (default: ISO date; remembered in the browser):
+```
+pip install --user git+https://github.com/jgarofoli/calendar@v1.4.0
+calfmt --check
+```
+
+```
+python3 -m unittest discover -s tests -t .
+```
+
+## The generator page
+
+Pick a year (defaults to the current year), then view the rendered or raw
+Markdown, copy it, or download it as `calendar-<year>.md`. Days are grouped
+by month and ISO week (Monday start), one line per day. Weeks that span two
+months appear under both.
+
+The **Format** button picks the day format (remembered in the browser):
 
 | Format   | Example              |
 |----------|----------------------|
-| Short    | `Thu 01`             |
-| ISO date | `W01 2026-01-01 Thu` (no `### Week` headings; weeks are separated by a blank line) |
-| Natural  | `Thu, Jan 1`         |
+| Short    | `Thu 01`, under `### Week 1` headings |
+| ISO date | `W01 2026-01-01 Thu`, weeks separated by a blank line (the default, and the one `SPEC.md` uses) |
+| Natural  | `Thu, Jan 1`, under `### Week 1` headings |
 
-Both settings can be set by URL: `?year=2027&format=iso` (`format` is `short`, `iso` or `natural`).
-The URL overrides the remembered choice.
+Both can be set in the URL, which overrides the remembered choice:
+`?year=2027&format=iso` (`format` is `short`, `iso`, or `natural`). The
+Markdown ends with a link back to the page with the same parameters.
 
-The markdown ends with a link back to the page at
-`https://jgarofoli.github.io/calendar/` with the current year and format as parameters.
-
-No build step, no dependencies.
-
-## Hosting on GitHub Pages
-
-Push the repo, then Settings → Pages → deploy from the branch, folder `/docs`. Only `docs/` is served, not the whole repo.
+No build step, no dependencies. GitHub Pages serves `docs/` from `master`
+(Settings → Pages → deploy from a branch, folder `/docs`).

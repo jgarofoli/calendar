@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calendar</title>
+<style>
+  :root { --bg: #fff; --fg: #1c1c1e; --muted: #6b6b70; --line: #d8d8dc; --accent: #0a60d6;
+          --soft: #f2f2f5; --warn: #b25e00; --bad: #c62828; --good: #2e7d32; --today: #fff6d6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17171a; --fg: #ececf0; --muted: #9a9aa2; --line: #36363c; --accent: #6aa5ff;
+            --soft: #222227; --warn: #f0a24a; --bad: #ff6b6b; --good: #7bd88f; --today: #3a3420; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 15px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+  main { max-width: 42rem; margin: 0 auto; padding: 0 16px 50vh; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line);
+           padding: .5rem 16px; }
+  .bar { max-width: 42rem; margin: 0 auto; display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+  .spacer { flex: 1; }
+  input, button, select, textarea { font: inherit; color: inherit; background: var(--bg);
+           border: 1px solid var(--line); border-radius: 6px; padding: .3rem .55rem; }
+  button { cursor: pointer; }
+  button:hover, button[aria-pressed=true] { border-color: var(--accent); color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  button.link { border: 0; padding: 0; background: none; color: var(--accent); }
+  #q { flex: 1 1 4rem; min-width: 0; width: 4rem; }
+  .badge { color: var(--warn); border-color: var(--warn); }
+  .badge.err { color: var(--bad); border-color: var(--bad); }
+  #filters { display: none; max-width: 42rem; margin: .4rem auto 0; gap: .4rem; flex-wrap: wrap; align-items: center; }
+  #filters.on { display: flex; }
+  #filters label { color: var(--muted); }
+  #banner { max-width: 42rem; margin: .5rem auto 0; padding: .5rem .75rem; border-radius: 6px;
+            border: 1px solid var(--bad); color: var(--bad); }
+  h1 { font-size: 1.6rem; margin: 1rem 0 .25rem; }
+  /* The month heading stays under the toolbar while its days scroll by. */
+  h2 { font-size: 1.2rem; margin: 1.25rem 0 .25rem; padding: .2rem 0; border-bottom: 1px solid var(--line);
+       display: flex; align-items: baseline; gap: .5rem; cursor: pointer; user-select: none;
+       position: sticky; top: var(--hdr, 0px); z-index: 3; background: var(--bg); }
+  h2 .count { color: var(--muted); font-size: .85rem; font-weight: normal; }
+  .caret { display: inline-block; width: 1em; color: var(--muted); font-size: .8em; }
+  .notes { margin: .25rem 0 .5rem; padding: .25rem .75rem; border-left: 3px solid var(--line);
+           color: var(--muted); }
+  .notes p { margin: .15rem 0; }
+  .notes-edit { font-size: .85rem; }
+  /* Weeks: a gap between them, as the blank lines in the file, and "W42" on the first day. */
+  .week + .week { margin-top: .6rem; }
+  .wkl { flex: 0 0 3ch; align-self: flex-start; text-align: left; border: 0; background: none; padding: .1rem 0;
+         color: var(--muted); opacity: .7; }
+  .wkl:hover { color: var(--accent); opacity: 1; }
+  .day.folded .evs { color: var(--muted); cursor: pointer; }
+  #saving { color: var(--muted); font-size: .85rem; }
+  /* Tags: tag-only detail lines show as labels on the event line. */
+  .tag { color: var(--accent); font-size: .8rem; margin-left: .5ch; cursor: pointer; white-space: nowrap; }
+  #tagbar { display: flex; flex-wrap: wrap; gap: .3rem; flex-basis: 100%; }
+  #tagbar:empty { display: none; }
+  #tagbar button { padding: .1rem .5rem; font-size: .85rem; }
+  #tagbar .n { color: var(--muted); }
+  .day { display: flex; gap: 1ch; padding: .12rem .25rem; border-radius: 6px; min-height: 1.9rem; }
+  .day.today { background: var(--today); }
+  .day.past .date { opacity: .65; }
+  .date { flex: 0 0 6ch; align-self: flex-start; text-align: left; border: 0; background: none; padding: .1rem 0;
+          color: var(--muted); white-space: pre; }
+  .date b { color: var(--fg); font-weight: 600; }
+  .date:hover { color: var(--accent); }
+  .evs { flex: 1; min-width: 0; padding-top: .1rem; }
+  /* Columns as in the file: text after the emoji at +3, details "- " with a hanging indent. */
+  .ev { cursor: pointer; overflow-wrap: anywhere; padding-left: 3ch; text-indent: -3ch; }
+  .ev .em { display: inline-block; width: 2ch; text-indent: 0; overflow: visible; white-space: nowrap; }
+  .ev .n { color: var(--muted); font-size: .8rem; margin-left: .3rem; }
+  .ev s { color: var(--muted); }
+  .ev code, .notes code { font-size: .9em; background: var(--soft); padding: 0 .2em; border-radius: 3px; }
+  .details { margin: 0 0 .2rem 3ch; padding: 0; list-style: none; color: var(--muted); }
+  .details li { padding-left: 2ch; text-indent: -2ch; overflow-wrap: anywhere; }
+  .details li::before { content: "- "; }
+  .acts { margin: .15rem 0 .4rem 3ch; font-size: .85rem; display: flex; flex-wrap: wrap; gap: .3rem .9rem;
+          align-items: center; color: var(--muted); }
+  .acts a { color: var(--accent); }
+  .acts input[type=date] { padding: .1rem .3rem; font-size: .85rem; }
+  .warnmark { color: var(--warn); font-size: .8rem; margin-left: .3rem; }
+  .hidden { display: none !important; }
+  dialog { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 10px;
+           padding: 1rem; width: min(36rem, calc(100vw - 24px)); max-height: calc(100vh - 24px); }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog h3 { margin: 0 0 .75rem; font-size: 1.1rem; }
+  .actions { display: flex; gap: .5rem; justify-content: flex-end; margin-top: 1rem; flex-wrap: wrap; }
+  .ed-ev { border: 1px solid var(--line); border-radius: 8px; padding: .5rem; margin-bottom: .5rem; }
+  .row { display: flex; gap: .3rem; align-items: center; margin-bottom: .3rem; }
+  .row input[type=text] { flex: 1; min-width: 0; }
+  .row button { padding: .25rem .45rem; min-width: 2rem; }
+  .ed-ev > .ev-text { width: 100%; margin-bottom: .3rem; }
+  .tools { margin: .2rem 0 0; }
+  .ed-det { margin-left: 1.25rem; }
+  .ed-det input { font-size: .95rem; }
+  textarea { width: 100%; font-size: 14px; }
+  pre.diff { font-size: 13px; line-height: 1.45; overflow: auto; max-height: 55vh;
+             background: var(--soft); padding: .5rem; border-radius: 6px; margin: 0; white-space: pre; }
+  pre.diff .add { color: var(--good); } pre.diff .del { color: var(--bad); } pre.diff .hunk { color: var(--muted); }
+  .msg { color: var(--bad); margin: .5rem 0; white-space: pre-wrap; }
+  .hint { color: var(--muted); font-size: .85rem; }
+  .findings { margin: 0; padding-left: 1.2rem; }
+  .findings li { margin: .25rem 0; }
+  .findings .error { color: var(--bad); } .findings .warning { color: var(--warn); }
+  .form { display: grid; grid-template-columns: auto 1fr; gap: .4rem .6rem; align-items: center; }
+  #toast { position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%); background: var(--fg);
+           color: var(--bg); padding: .45rem .9rem; border-radius: 8px; opacity: 0; transition: opacity .2s;
+           pointer-events: none; max-width: calc(100vw - 32px); z-index: 20; }
+  #toast.on { opacity: .92; }
+  .menu { position: relative; }
+  .menu-list { position: absolute; right: 0; top: 2.4rem; background: var(--bg); border: 1px solid var(--line);
+               border-radius: 8px; padding: .3rem; display: none; min-width: 13rem; z-index: 10;
+               box-shadow: 0 4px 16px rgba(0,0,0,.15); }
+  .menu-list.on { display: block; }
+  .menu-list button { display: block; width: 100%; text-align: left; border: 0; padding: .45rem .6rem; }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <select id="year" aria-label="Year"></select>
+    <button id="today">Today</button>
+    <input id="q" type="search" placeholder="Filter: text or emoji" aria-label="Filter">
+    <button id="filterBtn" aria-pressed="false" title="More filters">⋯</button>
+    <button id="lintBtn" class="badge hidden"></button>
+    <span id="saving" class="hidden" role="status">Saving…</span>
+    <span class="menu">
+      <button id="menuBtn" aria-label="Menu">☰</button>
+      <div id="menu" class="menu-list">
+        <button data-act="expand">Expand all details</button>
+        <button data-act="collapse">Collapse all details</button>
+        <button data-act="openmonths">Open all months and weeks</button>
+        <button data-act="range">New multi-day event…</button>
+        <button data-act="yearnotes">Edit year notes…</button>
+        <button data-act="format">Format file…</button>
+        <button data-act="applyannual">Apply annual events to this year…</button>
+        <button data-act="annual">Annual events…</button>
+        <button data-act="newyear">New year…</button>
+      </div>
+    </span>
+  </div>
+  <div id="filters">
+    <label><input type="checkbox" id="hideEmpty"> Hide empty days</label>
+    <button id="next30" aria-pressed="false">Next 30 days</button>
+    <label>From <input type="date" id="from"></label>
+    <label>To <input type="date" id="to"></label>
+    <button id="clearFilters" class="link">Clear</button>
+    <div id="tagbar"></div>
+  </div>
+  <div id="banner" class="hidden"></div>
+</header>
+<main>
+  <div id="cal"></div>
+</main>
+
+<dialog id="dayDlg">
+  <h3 id="dayTitle"></h3>
+  <div id="dayMsg" class="msg hidden"></div>
+  <div id="evList"></div>
+  <button id="addEv">+ Event</button>
+  <details id="mine" class="hidden"><summary>Your unsaved edit</summary><pre id="mineText"></pre></details>
+  <div class="actions"><button data-close>Cancel</button><button id="saveDay" class="primary">Save</button></div>
+</dialog>
+
+<dialog id="notesDlg">
+  <h3 id="notesTitle"></h3>
+  <p class="hint">One note per line.</p>
+  <div id="notesMsg" class="msg hidden"></div>
+  <textarea id="notesText" rows="6"></textarea>
+  <div class="actions"><button data-close>Cancel</button><button id="saveNotes" class="primary">Save</button></div>
+</dialog>
+
+<dialog id="diffDlg">
+  <h3 id="diffTitle"></h3>
+  <div id="diffMsg" class="msg hidden"></div>
+  <pre class="diff" id="diffText"></pre>
+  <div class="actions"><button data-close>Cancel</button><button id="diffGo" class="primary">Commit</button></div>
+</dialog>
+
+<dialog id="lintDlg">
+  <h3>Lint findings</h3>
+  <p class="hint">Errors in red. Fixable ones go away with “Format file”, or the next push.</p>
+  <ul class="findings" id="lintList"></ul>
+  <div class="actions"><button data-close>Close</button><button id="lintFormat" class="primary">Format file…</button></div>
+</dialog>
+
+<dialog id="rangeDlg">
+  <h3>New multi-day event</h3>
+  <div id="rangeMsg" class="msg hidden"></div>
+  <div class="form">
+    <label for="rEmoji">Emoji</label><input id="rEmoji" type="text" placeholder="🏖️" style="width:5rem">
+    <label for="rTitle">Title</label><input id="rTitle" type="text" placeholder="vacation" required>
+    <label for="rStart">From</label><input id="rStart" type="date">
+    <label for="rEnd">To</label><input id="rEnd" type="date">
+  </div>
+  <div class="actions"><button data-close>Cancel</button><button id="rGo" class="primary">Create</button></div>
+</dialog>
+
+<dialog id="annualDlg">
+  <h3>Annual events</h3>
+  <div id="annualMsg" class="msg hidden"></div>
+  <div class="form">
+    <label for="aDate">Date</label><input id="aDate" type="text" placeholder="MM-DD, 11-4Thu, Easter" style="width:12rem">
+    <label for="aText">Event</label><input id="aText" type="text" placeholder="🎂 Sam's {nth:1990} Birthday">
+    <label for="aGroup">Group</label><input id="aGroup" type="text" list="aGroups" placeholder="Birthdays">
+  </div>
+  <datalist id="aGroups"></datalist>
+  <p><label><input type="checkbox" id="aApply" checked> Then add it to existing year files</label></p>
+  <div class="actions"><button id="aAdd" class="primary">Add entry</button></div>
+  <p class="hint">Or edit <code>annual.md</code> directly (SPEC.md section 8):</p>
+  <textarea id="aText2" rows="12"></textarea>
+  <div class="actions"><button data-close>Close</button><button id="aSave">Save annual.md</button>
+    <button id="aApplyAll">Apply to all years…</button></div>
+</dialog>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+let years = [], data = null, today = isoToday();
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("cals." + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("cals." + k, JSON.stringify(v)); } catch {} },
+};
+// Collapse state: closed months/weeks per year, open events.
+let closed = new Set(store.get("closed", []));
+let openEv = new Set();
+let showAll = null;     // null: per-event state; true/false: expand/collapse all
+
+function isoToday() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+function addDays(iso, n) {
+  const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function esc(s) { return s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+// Opaque Markdown inline text (SPEC.md 6.5), rendered lightly.
+function md(s) {
+  let h = esc(s);
+  h = h.replace(/`([^`]+)`/g, "<code>$1</code>");
+  h = h.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  h = h.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  h = h.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+  h = h.replace(/~~(.+?)~~/g, "<s>$1</s>");
+  return h;
+}
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), 2600);
+}
+
+async function api(method, path, body) {
+  const r = await fetch(path, {method, headers: body ? {"Content-Type": "application/json"} : {},
+                               body: body ? JSON.stringify(body) : undefined});
+  let j = {};
+  try { j = await r.json(); } catch {}
+  if (!r.ok) { const e = new Error(j.error || r.statusText); e.status = r.status; e.body = j; throw e; }
+  return j;
+}
+
+function showMsg(el, text) { el.textContent = text || ""; el.classList.toggle("hidden", !text); }
+
+function setStatus(st) {
+  const msg = st && (st.broken || (st.offline && "Offline: can't reach GitHub, so saving is off. " + st.offline));
+  showMsg($("banner"), msg);
+}
+
+// ---------------------------------------------------------------- loading
+
+async function loadYears() {
+  const j = await api("GET", "/api/years");
+  years = j.years; today = isoToday(); setStatus(j.status);
+  const sel = $("year"); sel.replaceChildren();
+  for (const y of years) { const o = document.createElement("option"); o.value = o.textContent = y; sel.append(o); }
+  return j;
+}
+
+async function loadYear(y, scrollToday) {
+  data = await api("GET", "/api/years/" + y);
+  $("year").value = y;
+  history.replaceState(null, "", "?year=" + y + (tagSel.size ? "&tag=" + [...tagSel].join(",") : ""));
+  setStatus(data.status);
+  render();
+  if (scrollToday) jumpToday(false);
+}
+
+function setData(j) { if (j && j.months) { data = j; setStatus(j.status); render(); } }
+
+const hdr = document.querySelector("header");
+new ResizeObserver(() => document.documentElement.style.setProperty("--hdr", hdr.offsetHeight + "px")).observe(hdr);
+
+// ---------------------------------------------------------------- saving
+// Edits show at once; the saves go to the server one at a time in the
+// background, each on top of the version the previous one produced.
+
+const queue = [];
+function enqueue(job) {
+  queue.push(job); $("saving").classList.remove("hidden");
+  if (queue.length === 1) pump();
+}
+async function pump() {
+  while (queue.length) {
+    const job = queue[0];
+    let j;
+    try {
+      j = await api(job.method, job.path, Object.assign({base: job.year === data.year ? data.base : job.base}, job.body));
+    } catch (err) {
+      const lost = queue.splice(0);
+      $("saving").classList.add("hidden");
+      if (err.body && err.body.year && err.body.year.year === data.year) setData(err.body.year);
+      else api("GET", "/api/years/" + data.year).then(setData).catch(() => {});
+      job.failed(err, lost.slice(1));
+      return;
+    }
+    queue.shift();
+    if (j.year === data.year) {
+      if (queue.some(q => q.year === j.year)) data.base = j.base;   // keep the optimistic view
+      else setData(j);
+    }
+  }
+  $("saving").classList.add("hidden");
+}
+function lostNote(lost) {
+  return lost.length ? " Also not saved: " + lost.map(q => q.label).join(", ") + "." : "";
+}
+addEventListener("beforeunload", e => { if (queue.length) { e.preventDefault(); e.returnValue = ""; } });
+
+// ---------------------------------------------------------------- filtering
+
+function filters() {
+  const q = $("q").value.trim().toLowerCase();
+  let from = $("from").value || null, to = $("to").value || null;
+  if ($("next30").getAttribute("aria-pressed") === "true") { from = today; to = addDays(today, 30); }
+  return {q, from, to, hideEmpty: $("hideEmpty").checked, tags: tagSel};
+}
+function filtering(f) { return !!(f.q || f.from || f.to || f.hideEmpty || f.tags.size); }
+function evMatches(ev, q) {
+  if (!q) return true;
+  return ev.text.toLowerCase().includes(q) || ev.details.some(d => d.toLowerCase().includes(q));
+}
+// An event passes the text filter and has one of the selected tags (if any).
+function evPasses(ev, f) {
+  return evMatches(ev, f.q) && (!f.tags.size || evTags(ev).some(t => f.tags.has(t)));
+}
+
+// ---------------------------------------------------------------- tags
+// "#doctor" anywhere in an event or its details (SPEC.md 6.4).
+
+const TAG_RE = /(^|\s)#([A-Za-z0-9][A-Za-z0-9-]*)(?=\s|$)/g;   // no lookbehind: older Safari
+let tagSel = new Set((new URLSearchParams(location.search).get("tag") || "").split(",").filter(Boolean));
+function tagsOf(text) { return [...text.matchAll(TAG_RE)].map(m => m[2].toLowerCase()); }
+function isTagLine(text) { return !!text.trim() && !text.replace(TAG_RE, "$1").trim(); }
+function evTags(ev) { return [...new Set(tagsOf(ev.text).concat(...ev.details.map(tagsOf)))]; }
+function setTags(next) {
+  tagSel = next;
+  history.replaceState(null, "", "?year=" + data.year + (tagSel.size ? "&tag=" + [...tagSel].join(",") : ""));
+  render();
+}
+function toggleTag(t) { const n = new Set(tagSel); n.has(t) ? n.delete(t) : n.add(t); setTags(n); }
+
+function drawTagbar() {
+  const count = {};
+  for (const m of data.months) for (const d of m.days) for (const e of d.events)
+    for (const t of evTags(e)) count[t] = (count[t] || 0) + 1;
+  for (const t of tagSel) count[t] = count[t] || 0;
+  const bar = $("tagbar"); bar.replaceChildren();
+  for (const t of Object.keys(count).sort()) {
+    const b = document.createElement("button"); b.type = "button";
+    b.setAttribute("aria-pressed", tagSel.has(t));
+    b.innerHTML = "#" + esc(t) + ' <span class="n">' + count[t] + "</span>";
+    b.onclick = () => toggleTag(t);
+    bar.append(b);
+  }
+  $("filterBtn").textContent = tagSel.size ? "⋯ #" : "⋯";
+}
+
+// The later days of a range whose first day passes the filter pass too.
+function rangeDays(f) {
+  const out = new Set();
+  if (!f.q && !f.tags.size) return out;
+  for (const r of data.ranges) {
+    const head = findDay(r.start).events[r.index];
+    if (!head || !evPasses(head, f)) continue;
+    for (let d = addDays(r.start, 1); d <= r.end; d = addDays(d, 1)) {
+      const day = findDay(d);
+      const i = day ? day.events.findIndex(e => e.text.trim() === r.emoji) : -1;
+      if (i >= 0) out.add(d + "#" + i);
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- rendering
+
+function weeksOf(days) {
+  const out = [];
+  for (const d of days) {
+    if (!out.length || out[out.length - 1].week !== d.week) out.push({week: d.week, days: []});
+    out[out.length - 1].days.push(d);
+  }
+  return out;
+}
+
+function evCount(days) { return days.reduce((n, d) => n + d.events.length, 0); }
+
+function render() {
+  const f = filters(), filt = filtering(f), cal = $("cal");
+  const viaRange = rangeDays(f);
+  drawTagbar();
+  const findByDate = {};
+  for (const x of data.findings) if (x.date) (findByDate[x.date] = findByDate[x.date] || []).push(x);
+  const rangeHeads = {};
+  for (const r of data.ranges) rangeHeads[r.start + "#" + r.index] = r;
+  const frag = document.createDocumentFragment();
+  const h1 = document.createElement("h1"); h1.textContent = data.year; frag.append(h1);
+  frag.append(notesBlock(data.notes, 0));
+  for (const m of data.months) {
+    const key = data.year + "-" + m.month;
+    const sec = document.createElement("section");
+    const isClosed = closed.has(key) && !filt;
+    const h2 = document.createElement("h2");
+    h2.innerHTML = '<span class="caret">' + (isClosed ? "▸" : "▾") + "</span>" + esc(m.name) +
+      '<span class="count">' + (isClosed ? evCount(m.days) + " events" : "") + "</span>";
+    h2.onclick = () => { toggle(closed, key); render(); };
+    sec.append(h2);
+    let shown = 0;
+    if (!isClosed) {
+      if (!filt) sec.append(notesBlock(m.notes, m.month));
+      for (const w of weeksOf(m.days)) {
+        const wkey = key + "-W" + w.week;
+        const wClosed = closed.has(wkey) && !filt;
+        const fold = () => { toggle(closed, wkey); render(); };
+        const label = () => {
+          const b = document.createElement("button"); b.className = "wkl";
+          b.textContent = "W" + String(w.week).padStart(2, "0");
+          b.title = wClosed ? "Show this week" : "Fold this week"; b.onclick = fold; return b;
+        };
+        const box = document.createElement("div"); box.className = "week";
+        let wShown = 0;
+        if (wClosed) {
+          box.append(foldedRow(w, label(), fold));
+        } else for (const d of w.days) {
+          if (f.from && d.date < f.from) continue;
+          if (f.to && d.date > f.to) continue;
+          const evs = d.events.map((e, i) => [e, i])
+                               .filter(([e, i]) => evPasses(e, f) || viaRange.has(d.date + "#" + i));
+          if ((f.q || f.tags.size) && !evs.length) continue;
+          if (f.hideEmpty && !evs.length) continue;
+          const lead = wShown ? Object.assign(document.createElement("span"), {className: "wkl"}) : label();
+          box.append(dayRow(d, evs, findByDate[d.date], rangeHeads, lead));
+          wShown++;
+        }
+        if (wShown || (!filt)) { sec.append(box); shown += wShown; }
+      }
+    }
+    if (!filt || shown) frag.append(sec);
+  }
+  cal.replaceChildren(frag);
+  const nf = data.findings.length;
+  const lb = $("lintBtn");
+  lb.classList.toggle("hidden", !nf);
+  lb.classList.toggle("err", data.findings.some(x => x.severity === "error"));
+  lb.textContent = "⚠ " + nf;
+  lb.title = nf + " lint finding" + (nf === 1 ? "" : "s");
+}
+
+function toggle(set, key) {
+  set.has(key) ? set.delete(key) : set.add(key);
+  if (set === closed) store.set("closed", [...closed]);
+}
+
+function notesBlock(notes, month) {
+  const div = document.createElement("div");
+  if (notes.length) {
+    div.className = "notes";
+    for (const n of notes) { const p = document.createElement("p"); p.innerHTML = md(n); div.append(p); }
+    const b = document.createElement("button"); b.className = "link notes-edit"; b.textContent = "Edit notes";
+    b.onclick = () => editNotes(month); div.append(b);
+  } else if (month) {
+    const b = document.createElement("button"); b.className = "link notes-edit"; b.textContent = "+ Month notes";
+    b.style.opacity = ".6"; b.onclick = () => editNotes(month); div.append(b);
+  }
+  return div;
+}
+
+function foldedRow(w, lead, fold) {
+  const row = document.createElement("div"); row.className = "day folded";
+  const a = w.days[0], b = w.days[w.days.length - 1];
+  const date = document.createElement("span"); date.className = "date";
+  date.innerHTML = a.weekday + " <b>" + String(Number(a.date.slice(8))).padStart(2, " ") + "</b>";
+  const box = document.createElement("div"); box.className = "evs";
+  const n = evCount(w.days);
+  box.textContent = "▸ to " + b.weekday + " " + Number(b.date.slice(8)) + " · " +
+    (n ? n + " event" + (n === 1 ? "" : "s") : "no events");
+  box.onclick = fold;
+  row.append(lead, date, box);
+  return row;
+}
+
+function dayRow(d, evs, finds, rangeHeads, lead) {
+  const row = document.createElement("div");
+  row.className = "day" + (d.date === today ? " today" : "") + (d.date < today ? " past" : "");
+  row.id = "d" + d.date;
+  const btn = document.createElement("button");
+  btn.className = "date"; btn.title = "Edit " + d.date;
+  btn.innerHTML = d.weekday + " <b>" + String(Number(d.date.slice(8))).padStart(2, " ") + "</b>";
+  btn.onclick = () => editDay(d.date);
+  const box = document.createElement("div"); box.className = "evs";
+  if (finds) {
+    const w = document.createElement("span"); w.className = "warnmark";
+    w.textContent = "⚠ " + finds.map(x => x.code).join(" "); w.title = finds.map(x => x.message).join("\n");
+    w.onclick = () => $("lintBtn").click();
+    box.append(w);
+  }
+  for (const [e, i] of evs) {
+    const k = d.date + "#" + i;
+    const isOpen = showAll === null ? openEv.has(k) : (showAll || openEv.has(k));
+    const ev = document.createElement("div"); ev.className = "ev";
+    const details = e.details.filter(t => !isTagLine(t));
+    // Labels for tag-only details, except the tags being filtered on.
+    const labels = [].concat(...e.details.filter(isTagLine).map(tagsOf)).filter(t => !tagSel.has(t));
+    ev.innerHTML = withEmoji(e.text) + labels.map(t => '<span class="tag" data-tag="' + esc(t) + '">#' + esc(t) + "</span>").join("") +
+      (details.length ? '<span class="n">' + (isOpen ? "▾" : "▸ " + details.length) + "</span>" : "");
+    ev.onclick = (x) => { if (x.target.closest("a")) return; showAll = null;
+      const tag = x.target.closest(".tag"); if (tag) return toggleTag(tag.dataset.tag);
+      if (isOpen) openEv.delete(k); else openEv.add(k); render(); };
+    box.append(ev);
+    if (isOpen) {
+      if (details.length) {
+        const ul = document.createElement("ul"); ul.className = "details";
+        for (const t of details) { const li = document.createElement("li"); li.innerHTML = md(t); ul.append(li); }
+        box.append(ul);
+      }
+      box.append(eventActions(d, e, i, rangeHeads[k]));
+    }
+  }
+  row.append(lead, btn, box);
+  return row;
+}
+
+function eventActions(d, e, i, range) {
+  const acts = document.createElement("div"); acts.className = "acts";
+  const a = document.createElement("a"); a.href = "/api/ics/" + d.date + "/" + i + ".ics";
+  a.textContent = "Add to calendar"; acts.append(a);
+  const emoji = leadingEmoji(e.text);
+  if (emoji && e.text.trim() !== emoji) {
+    const end = document.createElement("input"); end.type = "date";
+    end.value = range ? range.end : d.date; end.min = d.date; end.max = data.year + "-12-31";
+    const lab = document.createElement("span");
+    lab.textContent = range ? "Range until" : "Repeat " + emoji + " until";
+    const go = document.createElement("button"); go.className = "link"; go.textContent = "Set";
+    go.onclick = () => rangeOp({op: "resize", start: d.date, emoji, end: end.value});
+    acts.append(lab, end, go);
+    if (range) {
+      const del = document.createElement("button"); del.className = "link"; del.textContent = "Delete range";
+      del.onclick = () => { if (confirm("Delete " + e.text + " and its " + emoji + " days?"))
+        rangeOp({op: "delete", start: d.date, emoji, index: i}); };
+      acts.append(del);
+    }
+  }
+  return acts;
+}
+
+// The leading emoji gets a fixed 2-column box, so event text lines up.
+function withEmoji(text) {
+  const em = leadingEmoji(text);
+  if (!em) return md(text);
+  return '<span class="em">' + esc(em) + "</span>" + (text.length > em.length ? md(text.slice(em.length)) : "");
+}
+
+function leadingEmoji(text) {
+  const tok = text.split(" ")[0];
+  if (!tok || tok.includes("~")) return null;
+  if (/[\p{L}\p{N}\p{P}]/u.test(tok)) return null;
+  return /\p{Extended_Pictographic}/u.test(tok) ? tok : null;
+}
+
+function jumpToday(smooth) {
+  if (!data || data.year !== Number(today.slice(0, 4))) {
+    if (years.includes(Number(today.slice(0, 4)))) return loadYear(Number(today.slice(0, 4)), true);
+    return toast("No file for " + today.slice(0, 4));
+  }
+  const m = Number(today.slice(5, 7));
+  const key = data.year + "-" + m;
+  const week = data.months[m - 1].days.find(d => d.date === today).week;
+  let changed = closed.delete(key);
+  changed = closed.delete(key + "-W" + week) || changed;
+  if (changed) { store.set("closed", [...closed]); render(); }
+  const el = $("d" + today);
+  if (!el) return;
+  const y = el.getBoundingClientRect().top + scrollY - innerHeight / 3;
+  scrollTo({top: Math.max(0, y), behavior: smooth ? "smooth" : "auto"});
+}
+
+// ---------------------------------------------------------------- day editor
+
+let editing = null;
+
+function findDay(date) {
+  for (const m of data.months) for (const d of m.days) if (d.date === date) return d;
+  return null;
+}
+
+function editDay(date) {
+  const d = findDay(date);
+  editing = {date, events: JSON.parse(JSON.stringify(d.events))};
+  const dt = new Date(date + "T12:00:00");
+  $("dayTitle").textContent = d.weekday + " " + dt.getDate() + " " + MON[dt.getMonth()] + " " + dt.getFullYear();
+  showMsg($("dayMsg"), "");
+  $("mine").classList.add("hidden");
+  if (!editing.events.length) editing.events.push({text: "", details: []});
+  drawEditor();
+  $("dayDlg").showModal();
+}
+
+function readEditor() {
+  // Pull current input values back into `editing`.
+  const evs = [];
+  for (const box of $("evList").children) {
+    const t = box.querySelector(".ev-text").value;
+    const details = [...box.querySelectorAll(".det-text")].map(i => i.value);
+    evs.push({text: t, details});
+  }
+  editing.events = evs;
+}
+
+function drawEditor() {
+  const list = $("evList"); list.replaceChildren();
+  editing.events.forEach((e, i) => {
+    const box = document.createElement("div"); box.className = "ed-ev";
+    const inp = document.createElement("input"); inp.type = "text"; inp.className = "ev-text";
+    inp.value = e.text; inp.placeholder = "🦷 Dentist @ 10";
+    box.append(inp);
+    e.details.forEach((t, j) => {
+      const r = document.createElement("div"); r.className = "row ed-det";
+      const di = document.createElement("input"); di.type = "text"; di.className = "det-text"; di.value = t;
+      di.placeholder = "detail";
+      r.append(di, btn("✕", "Remove detail", () => { readEditor(); editing.events[i].details.splice(j, 1); drawEditor(); }));
+      box.append(r);
+    });
+    const tools = document.createElement("div"); tools.className = "row tools";
+    const add = document.createElement("button"); add.className = "link"; add.textContent = "+ detail";
+    add.onclick = () => { readEditor(); editing.events[i].details.push(""); drawEditor();
+      const ds = $("evList").children[i].querySelectorAll(".det-text"); ds[ds.length - 1].focus(); };
+    const sp = document.createElement("span"); sp.className = "spacer";
+    tools.append(add, sp,
+      btn("↑", "Move up", () => move(i, -1), i === 0),
+      btn("↓", "Move down", () => move(i, 1), i === editing.events.length - 1),
+      btn("~~", "Cancel / restore (strikethrough)", () => strike(i)),
+      btn("✕", "Remove event", () => { readEditor(); editing.events.splice(i, 1); drawEditor(); }));
+    box.append(tools);
+    list.append(box);
+  });
+}
+
+function btn(label, title, fn, disabled) {
+  const b = document.createElement("button"); b.type = "button"; b.textContent = label; b.title = title;
+  b.setAttribute("aria-label", title); b.disabled = !!disabled; b.onclick = fn; return b;
+}
+function move(i, dir) {
+  readEditor(); const e = editing.events;
+  [e[i], e[i + dir]] = [e[i + dir], e[i]]; drawEditor();
+}
+function strike(i) {
+  readEditor(); const e = editing.events[i]; const t = e.text.trim();
+  e.text = (t.startsWith("~~") && t.endsWith("~~") && t.length >= 4) ? t.slice(2, -2).trim() : "~~" + t + "~~";
+  drawEditor();
+}
+
+$("addEv").onclick = () => {
+  readEditor(); editing.events.push({text: "", details: []}); drawEditor();
+  const ins = $("evList").querySelectorAll(".ev-text"); ins[ins.length - 1].focus();
+};
+
+$("saveDay").onclick = async () => {
+  readEditor();
+  const events = editing.events.map(e => ({text: e.text.trim(), details: e.details.map(s => s.trim()).filter(Boolean)}))
+                               .filter(e => e.text);
+  const date = editing.date;
+  findDay(date).events = JSON.parse(JSON.stringify(events));
+  $("dayDlg").close(); render();
+  enqueue({method: "PUT", path: "/api/days/" + date, body: {events}, year: data.year, base: data.base,
+           label: date, failed: (err, lost) => dayFailed(date, events, err, lost)});
+};
+
+// A background save failed: reopen the day with the current version and the
+// edit that was not saved.
+function dayFailed(date, events, err, lost) {
+  if ($("dayDlg").open || !findDay(date)) { toast("Not saved: " + date + ". " + err.message + lostNote(lost)); return; }
+  editDay(date);
+  if (err.status !== 409) { editing.events = JSON.parse(JSON.stringify(events)); drawEditor(); }
+  $("mineText").textContent = events.map(e => [e.text].concat(e.details.map(x => "  - " + x)).join("\n")).join("\n");
+  $("mine").classList.toggle("hidden", err.status !== 409); $("mine").open = true;
+  showMsg($("dayMsg"), "Not saved. " + err.message + lostNote(lost));
+}
+
+// ---------------------------------------------------------------- notes
+
+let notesKey = 0;
+function editNotes(month) {
+  notesKey = month;
+  const notes = month ? data.months[month - 1].notes : data.notes;
+  $("notesTitle").textContent = month ? data.months[month - 1].name + " " + data.year + " notes" : data.year + " notes";
+  $("notesText").value = notes.join("\n");
+  showMsg($("notesMsg"), "");
+  $("notesDlg").showModal();
+}
+$("saveNotes").onclick = async () => {
+  const notes = $("notesText").value.split("\n").map(s => s.trim()).filter(Boolean);
+  const path = "/api/notes/" + data.year + (notesKey ? "-" + String(notesKey).padStart(2, "0") : "");
+  const key = notesKey, text = $("notesText").value;
+  if (key) data.months[key - 1].notes = notes; else data.notes = notes;
+  $("notesDlg").close(); render();
+  enqueue({method: "PUT", path, body: {notes}, year: data.year, base: data.base, label: "notes",
+           failed: (err, lost) => {
+             if ($("notesDlg").open) return toast("Notes not saved. " + err.message + lostNote(lost));
+             editNotes(key); $("notesText").value = text;
+             showMsg($("notesMsg"), "Not saved. " + err.message + lostNote(lost));
+           }});
+};
+
+// ---------------------------------------------------------------- diffs, format, annual
+
+function showDiff(title, diff, go, goLabel) {
+  $("diffTitle").textContent = title;
+  const pre = $("diffText"); pre.replaceChildren();
+  for (const line of (diff || "No changes.\n").split("\n")) {
+    const s = document.createElement("span");
+    s.className = line.startsWith("+") && !line.startsWith("+++") ? "add" :
+                  line.startsWith("-") && !line.startsWith("---") ? "del" : line.startsWith("@@") ? "hunk" : "";
+    s.textContent = line + "\n"; pre.append(s);
+  }
+  showMsg($("diffMsg"), "");
+  $("diffGo").textContent = goLabel || "Commit";
+  $("diffGo").classList.toggle("hidden", !diff);
+  $("diffGo").onclick = async () => {
+    $("diffGo").disabled = true;
+    try { await go(); $("diffDlg").close(); }
+    catch (err) { if (err.body && err.body.year) setData(err.body.year); showMsg($("diffMsg"), err.message); }
+    finally { $("diffGo").disabled = false; }
+  };
+  if (!$("diffDlg").open) $("diffDlg").showModal();
+}
+
+async function formatFile() {
+  try {
+    const j = await api("POST", "/api/years/" + data.year + "/format", {commit: false});
+    showDiff("Format " + data.file, j.diff, async () => {
+      setData(await api("POST", "/api/years/" + data.year + "/format", {commit: true, base: j.base}));
+      toast("Formatted " + data.file);
+    });
+  } catch (err) { toast(err.message); }
+}
+
+async function applyAnnual(year) {
+  try {
+    const j = await api("POST", "/api/years/" + year + "/annual", {commit: false});
+    showDiff("Annual events → " + year + ".md (" + j.added.length + " to add)", j.diff, async () => {
+      const r = await api("POST", "/api/years/" + year + "/annual", {commit: true, base: j.base});
+      if (r.year === data.year) setData(r);
+      toast("Added " + r.added.length + " annual events to " + year);
+    }, "Add " + j.added.length);
+  } catch (err) { toast(err.message); }
+}
+
+async function applyAll() {
+  let diff = "", bases = {}, total = 0;
+  for (const y of years) {
+    const j = await api("POST", "/api/years/" + y + "/annual", {commit: false});
+    diff += j.diff; bases[y] = j.base; total += j.added.length;
+  }
+  showDiff("Annual events → all years (" + total + " to add)", diff, async () => {
+    for (const y of years) {
+      if (!bases[y]) continue;
+      const r = await api("POST", "/api/years/" + y + "/annual", {commit: true, base: bases[y]});
+      if (r.year === data.year) setData(r);
+    }
+    toast("Added " + total + " annual events");
+  }, "Add " + total);
+}
+
+let annual = null;
+async function openAnnual() {
+  annual = await api("GET", "/api/annual");
+  $("aText2").value = annual.text || "# Annual events\n";
+  const dl = $("aGroups"); dl.replaceChildren();
+  for (const g of annual.groups) { const o = document.createElement("option"); o.value = g; dl.append(o); }
+  const bad = annual.findings.filter(f => f.severity === "error");
+  showMsg($("annualMsg"), bad.length ? bad.map(f => "line " + f.line + ": " + f.code + " " + f.message).join("\n") : "");
+  if (!$("annualDlg").open) $("annualDlg").showModal();
+}
+$("aAdd").onclick = async () => {
+  try {
+    annual = await api("POST", "/api/annual/entries", {base: annual.base, date: $("aDate").value.trim(),
+      text: $("aText").value, group: $("aGroup").value.trim()});
+    $("aText2").value = annual.text; $("aText").value = ""; $("aDate").value = "";
+    showMsg($("annualMsg"), ""); toast("Entry added");
+    if ($("aApply").checked) { $("annualDlg").close(); await applyAll(); }
+  } catch (err) { showMsg($("annualMsg"), err.message + (err.body && err.body.findings ?
+    "\n" + err.body.findings.map(f => "line " + f.line + ": " + f.code + " " + f.message).join("\n") : "")); }
+};
+$("aSave").onclick = async () => {
+  try { annual = await api("PUT", "/api/annual", {base: annual.base, text: $("aText2").value});
+        $("aText2").value = annual.text; showMsg($("annualMsg"), ""); toast("annual.md saved"); }
+  catch (err) { showMsg($("annualMsg"), err.message + (err.body && err.body.findings ?
+    "\n" + err.body.findings.map(f => "line " + f.line + ": " + f.code + " " + f.message).join("\n") : "")); }
+};
+$("aApplyAll").onclick = async () => { $("annualDlg").close(); try { await applyAll(); } catch (err) { toast(err.message); } };
+
+async function newYear() {
+  const next = (years.length ? Math.max(...years) : Number(today.slice(0, 4))) + 1;
+  const y = Number(prompt("Create which year?", next));
+  if (!y) return;
+  if (years.includes(y)) return toast(y + ".md already exists");
+  try {
+    const j = await api("POST", "/api/years", {year: y, commit: false});
+    showDiff("New " + y + ".md with " + j.count + " annual events", j.preview, async () => {
+      await api("POST", "/api/years", {year: y, commit: true});
+      await loadYears(); await loadYear(y, false); toast("Created " + y + ".md");
+    }, "Create " + y + ".md");
+  } catch (err) { toast(err.message); }
+}
+
+async function rangeOp(body) {
+  try { setData(await api("POST", "/api/ranges", Object.assign({base: data.base}, body))); toast("Range saved"); return true; }
+  catch (err) { if (err.body && err.body.year) setData(err.body.year); toast(err.message); return false; }
+}
+$("rGo").onclick = async () => {
+  const body = {op: "create", emoji: $("rEmoji").value.trim(), title: $("rTitle").value.trim(),
+                start: $("rStart").value, end: $("rEnd").value};
+  try { setData(await api("POST", "/api/ranges", Object.assign({base: data.base}, body)));
+        $("rangeDlg").close(); toast("Range created"); }
+  catch (err) { if (err.body && err.body.year) setData(err.body.year); showMsg($("rangeMsg"), err.message); }
+};
+
+function openLint() {
+  const ul = $("lintList"); ul.replaceChildren();
+  for (const f of data.findings) {
+    const li = document.createElement("li"); li.className = f.severity;
+    li.textContent = "line " + f.line + ": " + f.code + " " + f.message + (f.fixable ? "" : " (fix by hand)");
+    if (f.date) { li.style.cursor = "pointer"; li.onclick = () => { $("lintDlg").close(); scrollToDay(f.date); }; }
+    ul.append(li);
+  }
+  $("lintDlg").showModal();
+}
+function scrollToDay(date) {
+  const m = Number(date.slice(5, 7)); closed.delete(data.year + "-" + m);
+  const d = findDay(date); if (d) closed.delete(data.year + "-" + m + "-W" + d.week);
+  render();
+  const el = $("d" + date); if (el) scrollTo({top: el.getBoundingClientRect().top + scrollY - innerHeight / 3});
+}
+
+// ---------------------------------------------------------------- wiring
+
+document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
+$("year").onchange = () => loadYear(Number($("year").value), false);
+$("today").onclick = () => { today = isoToday(); jumpToday(true); };
+$("q").oninput = () => render();
+$("filterBtn").onclick = () => {
+  const on = $("filters").classList.toggle("on"); $("filterBtn").setAttribute("aria-pressed", on);
+};
+for (const id of ["hideEmpty", "from", "to"]) $(id).onchange = () => render();
+$("next30").onclick = () => {
+  const on = $("next30").getAttribute("aria-pressed") !== "true";
+  $("next30").setAttribute("aria-pressed", on);
+  if (on && data.year !== Number(today.slice(0, 4)) && years.includes(Number(today.slice(0, 4)))) loadYear(Number(today.slice(0, 4)));
+  else render();
+};
+$("clearFilters").onclick = () => {
+  $("q").value = ""; $("from").value = ""; $("to").value = ""; $("hideEmpty").checked = false; tagSel = new Set();
+  history.replaceState(null, "", "?year=" + data.year);
+  $("next30").setAttribute("aria-pressed", "false"); render();
+};
+$("lintBtn").onclick = openLint;
+$("lintFormat").onclick = () => { $("lintDlg").close(); formatFile(); };
+$("menuBtn").onclick = (e) => { e.stopPropagation(); $("menu").classList.toggle("on"); };
+document.addEventListener("click", () => $("menu").classList.remove("on"));
+$("menu").onclick = async (e) => {
+  const act = e.target.dataset.act; if (!act) return;
+  $("menu").classList.remove("on");
+  if (act === "expand") { showAll = true; openEv.clear(); render(); }
+  if (act === "collapse") { showAll = false; openEv.clear(); render(); }
+  if (act === "openmonths") { closed = new Set([...closed].filter(k => !k.startsWith(data.year + "-"))); store.set("closed", [...closed]); render(); }
+  if (act === "range") {
+    $("rStart").value = $("rEnd").value = data.year === Number(today.slice(0, 4)) ? today : data.year + "-01-01";
+    $("rEmoji").value = ""; $("rTitle").value = ""; showMsg($("rangeMsg"), ""); $("rangeDlg").showModal();
+  }
+  if (act === "yearnotes") editNotes(0);
+  if (act === "format") formatFile();
+  if (act === "applyannual") applyAnnual(data.year);
+  if (act === "annual") { try { await openAnnual(); } catch (err) { toast(err.message); } }
+  if (act === "newyear") newYear();
+};
+// Refresh when coming back to the tab, so edits from other devices show up.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && data && !queue.length && !document.querySelector("dialog[open]"))
+    api("GET", "/api/years/" + data.year).then(setData).catch(() => {});
+});
+
+(async () => {
+  try {
+    await loadYears();
+    const q = Number(new URLSearchParams(location.search).get("year"));
+    const ty = Number(today.slice(0, 4));
+    const y = years.includes(q) ? q : years.includes(ty) ? ty : years[years.length - 1];
+    if (tagSel.size) { $("filters").classList.add("on"); $("filterBtn").setAttribute("aria-pressed", true); }
+    if (y) await loadYear(y, y === ty);
+    else $("cal").textContent = "No year files yet. Use ☰ → New year.";
+  } catch (err) { showMsg($("banner"), "Could not load: " + err.message); }
+})();
+</script>
+</body>
+</html>
