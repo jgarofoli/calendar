@@ -1,6 +1,7 @@
 # Calendar File Format
 
-Version 1.0
+Version 1.0. Dedicated to the public domain under
+[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 
 A plain-text format for a yearly calendar. Each year is one file, with one
 line per day and events written beside the day they happen. A companion file

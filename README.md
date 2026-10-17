@@ -55,3 +55,11 @@ Markdown ends with a link back to the page with the same parameters.
 
 No build step, no dependencies. GitHub Pages serves `docs/` from `master`
 (Settings → Pages → deploy from a branch, folder `/docs`).
+
+## License
+
+`SPEC.md` is dedicated to the public domain under
+[CC0 1.0](LICENSE-SPEC): copy it, change it, or build on it, with no
+conditions. Everything else, the code and the generator page included, is
+under [MIT No Attribution](LICENSE) (MIT-0): use it for anything, with no
+need to credit anyone.

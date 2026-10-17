@@ -8,6 +8,8 @@ version = "1.4.0"
 description = "Lint, format, and edit plain-text calendar files (SPEC.md)"
 readme = "README.md"
 requires-python = ">=3.8"
+license = { text = "MIT-0" }
+classifiers = ["License :: OSI Approved :: MIT No Attribution License (MIT-0)"]
 
 [project.urls]
 Homepage = "https://github.com/jgarofoli/calendar"
