@@ -275,8 +275,8 @@ such as 🏖️.
 
 ## 8. Annual file
 
-`annual.md` lists events that repeat every year. Each one is copied into
-each year's file.
+`annual.md` lists events that repeat every year, and events that repeat
+more often (section 8.5). Each one is copied into each year's file.
 
 ```
 # Annual events
@@ -363,3 +363,42 @@ For 2027, the example above gives:
 | 2027-10-10 | 🎂 Jordan's Birthday              |
 | 2027-11-25 | 🦃 Thanksgiving                   |
 | 2027-11-28 | 🕯️ First Sunday of Advent         |
+
+### 8.5 Repeating more often
+
+These dates repeat within a year:
+
+| Date              | Means                                        | Example                       |
+|-------------------|----------------------------------------------|-------------------------------|
+| `*-DD`            | that day of every month                      | `*-01` Rent                   |
+| `*-nDdd`          | *n*th weekday of every month, *n* = 1–4      | `*-1Mon` Bulk trash           |
+| `*-LDdd`          | last weekday of every month                  | `*-LFri` Payday               |
+| `YYYY-MM-DD/Nd`   | every *N* days from that date, *N* = 1–99    | `2026-11-03/10d` Water plants |
+| `YYYY-MM-DD/Nw`   | every *N* weeks from that date               | `2026-11-03/2w` Cleaners      |
+| `YYYY-MM-DD/Nm`   | every *N* months from that date, same day    | `2026-11-15/3m` Estimated tax |
+
+A month without the day is skipped: `*-31` falls in seven months, and
+`2026-01-31/1m` does too.
+
+A `*-` date starts on 1 January unless it is followed by `@YYYY-MM-DD`:
+`*-1Mon@2026-12-01` starts with the first Monday on or after that day. A
+`/` date starts on its own date. Any of these dates can end with
+`..YYYY-MM-DD`, the last day an occurrence can fall on:
+`2026-11-03/2w..2027-06-30`. A date that does not exist (`2026-02-30`), or
+an end before the start, is an error.
+
+Counters (section 8.3) work as in yearly entries. An entry with
+`{nth:YYYY}` starts in the year after `YYYY`, whatever its date says.
+
+With the example
+
+```
+*-01 💸 Rent␣␣
+2026-11-03/2w..2026-12-31 🧹 Cleaners␣␣
+                             - #house␣␣
+```
+
+2026 gets `💸 Rent` on the first of each month, and `🧹 Cleaners` on
+2026-11-03, 11-17, 12-01, 12-15, and 12-29, each with the detail
+`#house`. The detail sits 3 columns past the start of the entry's text, as
+in section 8.1.

@@ -270,6 +270,10 @@ class Write(Base):
         self.assertEqual(st, 200, a)
         self.assertIn("## House\n\n03-1Mon 🧾 Taxes  \n           - #money  \n           - call Pat  \n",
                       a["text"])
+        st, j = self.call("POST", "/api/annual/entries", {"base": a["base"], "date": "*-1Mon@2026-02-30",
+                                                          "text": "🗑️ Trash"})
+        self.assertEqual(st, 400)
+        self.assertIn("2026-02-30 is not a valid date", j["error"])
         st, a = self.call("PUT", "/api/annual", {"base": a["base"], "text": a["text"].replace(
             "03-1Mon 🧾 Taxes  \n           - #money  \n           - call Pat  \n", "")})
         self.assertEqual(st, 200, a)

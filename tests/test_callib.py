@@ -496,6 +496,47 @@ class Tags(unittest.TestCase):
                          ["Daylight Saving Time Ends (fall back)", "🎂 Jaden's Birthday"])
 
 
+    def test_repeating_dates(self):
+        def on(when, year=2027):
+            return [d.isoformat() for d, _ in c.occurrences(when, year)]
+        self.assertEqual(len(on("*-01")), 12)
+        self.assertEqual(on("*-31")[:3], ["2027-01-31", "2027-03-31", "2027-05-31"])
+        self.assertEqual(len(on("*-31")), 7)
+        self.assertEqual(on("*-1Mon")[:3], ["2027-01-04", "2027-02-01", "2027-03-01"])
+        self.assertEqual(on("*-LFri")[-1], "2027-12-31")
+        self.assertEqual(on("*-1Mon@2027-10-05"), ["2027-11-01", "2027-12-06"])
+        self.assertEqual(on("*-1Mon@2027-03-01..2027-05-31"), ["2027-03-01", "2027-04-05", "2027-05-03"])
+        self.assertEqual(on("2026-11-03/2w", 2026), ["2026-11-03", "2026-11-17", "2026-12-01",
+                                                      "2026-12-15", "2026-12-29"])
+        self.assertEqual(on("2026-11-03/2w")[:2], ["2027-01-12", "2027-01-26"])
+        self.assertEqual(on("2026-11-03/2w..2027-02-01"), ["2027-01-12", "2027-01-26"])
+        self.assertEqual(on("2025-12-30/10d")[0], "2027-01-04")
+        self.assertEqual(on("2026-01-31/1m")[:2], ["2027-01-31", "2027-03-31"])
+        self.assertEqual(on("2026-11-15/3m"), ["2027-02-15", "2027-05-15", "2027-08-15", "2027-11-15"])
+        self.assertEqual(on("2028-01-01/1w"), [])
+        self.assertEqual(on("2026-11-03/2w..2026-12-31"), [])
+        for bad in ["*-32", "*-00", "2026-02-30/1w", "*-1Mon@2027-03-01..2027-01-01",
+                    "2026-11-03/1d..2026-11-02"]:
+            af = c.parse_annual("# Annual events\n\n%s 🎉 x  \n" % bad)
+            self.assertEqual([f.code for f in af.findings], ["L10"], bad)
+        for bad in ["*-5Mon", "2026-11-03/2w@2026-12-01", "2026-11-03/0w", "2026-11-03/2y", "*-1"]:
+            af = c.parse_annual("# Annual events\n\n%s 🎉 x  \n" % bad)
+            self.assertIn("L07", [f.code for f in af.findings], bad)
+
+    def test_apply_repeating(self):
+        af = c.parse_annual("# Annual events\n\n*-01 💸 Rent  \n"
+                            "2027-11-03/2w..2027-12-31 🧹 Cleaners  \n"
+                            "                             - #house  \n")
+        self.assertEqual(af.findings, [])
+        m = c.parse("2027.md", c.skeleton_text(2027))
+        m.days[D(2027, 12, 1)].events = [c.Event("~~🧹 Cleaners~~")]
+        added = c.apply_annual(m, af)
+        self.assertEqual(len([t for _, t in added if "Rent" in t]), 12)
+        self.assertEqual([d for d, t in added if "Clean" in t],
+                         [D(2027, 11, 3), D(2027, 11, 17), D(2027, 12, 15), D(2027, 12, 29)])
+        self.assertEqual(c.apply_annual(m, af), [])
+
+
 class Ranges(unittest.TestCase):
     def model(self):
         return c.parse("2026.md", fixture("2026-before.md"))

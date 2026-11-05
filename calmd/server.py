@@ -593,7 +593,10 @@ class API:
         m = callib.ENTRY_RE.match(when)
         if not m or m.group(1) != when or callib.date_error(when):
             raise HTTPError(400, "date must be MM-DD, MM-nDdd (11-4Thu, 05-LMon), "
-                                 "MM-DD±nDdd (12-25-4Sun), or Easter[±N]")
+                                 "MM-DD±nDdd (12-25-4Sun), Easter[±N], *-DD or *-nDdd "
+                                 "(every month), or YYYY-MM-DD/2w (every N d, w, or m); "
+                                 "see SPEC.md 8.2 and 8.5" + (": " + callib.date_error(when)
+                                                             if m and callib.date_error(when) else ""))
         entry = callib.Entry(when, callib.clean_text(body.get("text", "")),
                              [callib.Detail(callib.clean_text(t)) for t in body.get("details", [])
                               if callib.clean_text(t)])

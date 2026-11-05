@@ -100,6 +100,16 @@
   .msg { color: var(--bad); margin: .5rem 0; white-space: pre-wrap; }
   .hint { color: var(--muted); font-size: .85rem; }
   #heldList label { display: block; margin: .2rem 0; }
+  .cheat { margin: .5rem 0; }
+  .cheat summary { cursor: pointer; color: var(--muted); }
+  /* Each row: the code in an 8.5rem slot, the meaning beside it, or under it when there is no room. */
+  .cheat table, .cheat tbody, .cheat tr { display: block; font-size: .9rem; }
+  .cheat table { margin-top: .3rem; }
+  .cheat th { display: block; text-align: left; padding: .5rem 0 .1rem; font-weight: 600; }
+  .cheat tr { display: flex; flex-wrap: wrap; column-gap: .5rem; padding: .15rem 0; }
+  .cheat td:first-child { flex: 0 0 auto; min-width: 8.5rem; }
+  .cheat td:last-child { flex: 1 1 8rem; color: var(--muted); }
+  .cheat code { white-space: nowrap; }
   #heldList .like { color: var(--muted); }
   .findings { margin: 0; padding-left: 1.2rem; }
   .findings li { margin: .25rem 0; }
@@ -204,12 +214,40 @@
   <h3>Annual events</h3>
   <div id="annualMsg" class="msg hidden"></div>
   <div class="form">
-    <label for="aDate">Date</label><input id="aDate" type="text" placeholder="MM-DD, 11-4Thu, Easter" style="width:12rem">
+    <label for="aDate">Date</label><input id="aDate" type="text" placeholder="see cheat sheet below" style="width:16rem">
     <label for="aText">Event</label><input id="aText" type="text" placeholder="🎂 Sam's {nth:1990} Birthday">
     <label for="aDet">Details</label><textarea id="aDet" rows="3" placeholder="One per line, e.g. #birthdays"></textarea>
     <label for="aGroup">Group</label><input id="aGroup" type="text" list="aGroups" placeholder="Birthdays">
   </div>
   <datalist id="aGroups"></datalist>
+  <details class="cheat"><summary>Date cheat sheet</summary>
+    <table>
+      <tr><th colspan="2">Once a year</th></tr>
+      <tr><td><code>07-04</code></td><td>July 4</td></tr>
+      <tr><td><code>11-4Thu</code></td><td>4th Thursday of November (1–4)</td></tr>
+      <tr><td><code>05-LMon</code></td><td>last Monday of May</td></tr>
+      <tr><td><code>12-25-4Sun</code></td><td>4th Sunday before Dec 25</td></tr>
+      <tr><td><code>11-01+1Tue</code></td><td>1st Tuesday after Nov 1</td></tr>
+      <tr><td><code>Easter</code>, <code>Easter-2</code></td><td>Easter, 2 days before Easter</td></tr>
+      <tr><th colspan="2">Every month</th></tr>
+      <tr><td><code>*-15</code></td><td>the 15th (<code>*-31</code> skips short months)</td></tr>
+      <tr><td><code>*-1Mon</code></td><td>1st Monday</td></tr>
+      <tr><td><code>*-LFri</code></td><td>last Friday</td></tr>
+      <tr><th colspan="2">Every few days, weeks, or months</th></tr>
+      <tr><td><code>2026-11-03/2w</code></td><td>every 2 weeks from Nov 3, 2026</td></tr>
+      <tr><td><code>2026-11-03/10d</code></td><td>every 10 days</td></tr>
+      <tr><td><code>2026-11-15/3m</code></td><td>every 3 months, on the 15th</td></tr>
+      <tr><th colspan="2">Start and stop</th></tr>
+      <tr><td><code>*-1Mon@2026-12-01</code></td><td>monthly, starting Dec 1, 2026</td></tr>
+      <tr><td><code>2026-11-03/2w..2027-06-30</code></td><td>stop after Jun 30, 2027 (any repeat)</td></tr>
+      <tr><th colspan="2">In the event text</th></tr>
+      <tr><td><code>{nth:1990}</code></td><td>“37th” in 2027</td></tr>
+      <tr><td><code>{n:2015}</code></td><td>“12” in 2027</td></tr>
+    </table>
+    <p class="hint">Weekdays: Mon Tue Wed Thu Fri Sat Sun. Applying fills every matching day of each year
+      file, past days included, so give a monthly repeat a start (<code>@</code>) unless you want them.
+      To skip one occurrence, strike it through on that day.</p>
+  </details>
   <p><label><input type="checkbox" id="aApply" checked> Then add it to existing year files</label></p>
   <div class="actions"><button id="aAdd" class="primary">Add entry</button></div>
   <p class="hint">Or edit <code>annual.md</code> directly (SPEC.md section 8):</p>

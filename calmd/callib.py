@@ -24,9 +24,17 @@ DAY_RE = re.compile(
     r"^W(\d\d) (\d{4})-(\d\d)-(\d\d) (Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?= |$)")
 # An annual.md date (8.2): MM-DD, MM-nDdd (n = 1-4 or L for last),
 # MM-DD-nDdd / MM-DD+nDdd (nth weekday before / after a date), or Easter
-# with an optional day offset.
+# with an optional day offset. Repeating dates (8.5): *-DD or *-nDdd every
+# month, optionally @START; YYYY-MM-DD/N(d|w|m) every N days, weeks, or
+# months from a date; either optionally ..END.
 _DDD = "(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)"
-ENTRY_RE = re.compile(r"^(\d\d-\d\d[+-][1-9]" + _DDD + r"|\d\d-(?:\d\d|[1-4L]" + _DDD + r")"
+_YMD = r"\d{4}-\d\d-\d\d"
+REPEAT_RE = re.compile(r"^(?:\*-(?P<mday>\d\d|[1-4L]" + _DDD + r")(?:@(?P<start>" + _YMD + r"))?"
+                       r"|(?P<from>" + _YMD + r")/(?P<n>[1-9]\d?)(?P<unit>[dwm]))"
+                       r"(?:\.\.(?P<end>" + _YMD + r"))?$")
+ENTRY_RE = re.compile(r"^((?:\*-(?:\d\d|[1-4L]" + _DDD + r")(?:@" + _YMD + r")?"
+                      r"|" + _YMD + r"/[1-9]\d?[dwm])(?:\.\." + _YMD + r")?"
+                      r"|\d\d-\d\d[+-][1-9]" + _DDD + r"|\d\d-(?:\d\d|[1-4L]" + _DDD + r")"
                       r"|Easter(?:[+-]\d{1,3})?)(?= |$)")
 URL_RE = re.compile(r"^https?://\S+$")
 YEAR_FILE_RE = re.compile(r"^\d{4}\.md$")
@@ -732,9 +740,27 @@ def easter(year: int) -> datetime.date:
     return datetime.date(year, month, day + 1)
 
 
+def _ymd(s: str) -> Optional[datetime.date]:
+    try:
+        return datetime.date.fromisoformat(s)
+    except ValueError:
+        return None
+
+
 def date_error(when: str) -> Optional[str]:
     """Why an annual.md date token is invalid (L10), or None."""
     if when.startswith("Easter"):
+        return None
+    m = REPEAT_RE.match(when)
+    if m:
+        for k in ("start", "from", "end"):
+            if m.group(k) and _ymd(m.group(k)) is None:
+                return "%s is not a valid date" % m.group(k)
+        if m.group("mday") and m.group("mday").isdigit() and not 1 <= int(m.group("mday")) <= 31:
+            return "*-%s: no day %s in any month" % (m.group("mday"), m.group("mday"))
+        first = m.group("start") or m.group("from")
+        if first and m.group("end") and m.group("end") < first:
+            return "%s ends before it starts" % when
         return None
     mm = int(when[:2])
     if not 1 <= mm <= 12:
@@ -937,6 +963,59 @@ def expand(text: str, year: int) -> str:
     return COUNTER_RE.sub(sub, text)
 
 
+def _add_months(d: datetime.date, k: int) -> Optional[datetime.date]:
+    y, m = divmod(d.month - 1 + k, 12)
+    try:
+        return d.replace(year=d.year + y, month=m + 1)
+    except ValueError:                  # no such day in that month
+        return None
+
+
+def occurrences(when: str, year: int) -> List[Tuple[datetime.date, bool]]:
+    """Every date `when` falls on in `year`, and whether each is a moved 02-29."""
+    m = REPEAT_RE.match(when)
+    if not m:
+        date, moved = resolve(when, year)
+        return [(date, moved)] if date.year == year else []   # counted across New Year
+    end = _ymd(m.group("end")) if m.group("end") else datetime.date(year, 12, 31)
+    end = min(end, datetime.date(year, 12, 31))
+    out = []
+    if m.group("mday"):
+        start = _ymd(m.group("start")) if m.group("start") else datetime.date(year, 1, 1)
+        for mm in range(1, 13):
+            if m.group("mday").isdigit():
+                dd = int(m.group("mday"))
+                if dd > calendar.monthrange(year, mm)[1]:
+                    continue                    # *-31 skips 30-day months
+                d = datetime.date(year, mm, dd)
+            else:
+                d, _ = resolve("%02d-%s" % (mm, m.group("mday")), year)
+            if start <= d <= end:
+                out.append((d, False))
+        return out
+    first, n, unit = _ymd(m.group("from")), int(m.group("n")), m.group("unit")
+    if unit == "m":
+        # Months from `first` to January of `year`, rounded down to a step.
+        k = max(0, (year - first.year) * 12 - (first.month - 1)) // n * n
+        while True:
+            d = _add_months(first, k)
+            k += n
+            if d is None:
+                continue                        # day 31 in a 30-day month
+            if d > end:
+                break
+            if d.year == year:
+                out.append((d, False))
+        return out
+    step = n * (7 if unit == "w" else 1)
+    k = max(0, (datetime.date(year, 1, 1) - first).days + step - 1) // step
+    d = first + datetime.timedelta(days=k * step)
+    while d <= end:
+        out.append((d, False))
+        d += datetime.timedelta(days=step)
+    return out
+
+
 def annual_events(af: AnnualFile, year: int) -> List[Tuple[datetime.date, Event]]:
     """The events annual.md puts in `year`, in file order (12.2, 12.3)."""
     out = []
@@ -944,11 +1023,9 @@ def annual_events(af: AnnualFile, year: int) -> List[Tuple[datetime.date, Event]
         sy = entry_year(e)
         if sy is not None and year <= sy or date_error(e.when):
             continue
-        date, moved = resolve(e.when, year)
-        if date.year != year:           # counted across New Year
-            continue
-        text = expand(e.text, year) + (" (02-29)" if moved else "")
-        out.append((date, Event(text, [Detail(expand(x.text, year)) for x in e.details])))
+        for date, moved in occurrences(e.when, year):
+            text = expand(e.text, year) + (" (02-29)" if moved else "")
+            out.append((date, Event(text, [Detail(expand(x.text, year)) for x in e.details])))
     return out
 
 

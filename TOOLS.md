@@ -226,6 +226,12 @@ Beyond `SPEC.md` section 8.2:
   in most years.
 - An entry whose date falls outside the target year (`Easter+300`,
   `12-25+2Sun`) is skipped for that year.
+- `*-5Ddd` is unparseable for the same reason. A start (`@`) on a `/`
+  date is unparseable: its date is already the start.
+- Repeating dates (`SPEC.md` section 8.5) are copied to every matching day
+  of the year, past days included, like yearly ones (6.3). Give a monthly
+  repeat a start with `@` to leave earlier months alone. To skip one
+  occurrence, strike it through; applying again does not add it back.
 - Observed holidays (a Saturday holiday taken on Friday) are not computed.
 - All counters in one entry must use the same year.
 
