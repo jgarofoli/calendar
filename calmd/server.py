@@ -480,13 +480,18 @@ class API:
         if af is None:
             raise HTTPError(404, "there is no annual.md yet")
         result = {}
+        try:
+            include = {(parse_date(x["date"]), x["text"]) for x in body.get("include") or []}
+        except (KeyError, TypeError):
+            raise HTTPError(400, "include must be a list of {date, text}")
 
         def change(text):
             model = load_model(text, year)
-            tagged = []
-            added = callib.apply_annual(model, af, tagged)
+            tagged, held = [], []
+            added = callib.apply_annual(model, af, tagged, held, include)
             result["added"] = [{"date": d.isoformat(), "text": t} for d, t in added]
             result["tagged"] = [{"date": d.isoformat(), "text": t} for d, t in tagged]
+            result["held"] = [{"date": d.isoformat(), "text": t, "like": k} for d, t, k in held]
             return callib.rewrite_days(text, model, [d for d, _ in added + tagged])
 
         if not body.get("commit"):
@@ -503,6 +508,7 @@ class API:
         payload = self._edit_year(year, body.get("base"), change, message)
         payload["added"] = result.get("added", [])
         payload["tagged"] = result.get("tagged", [])
+        payload["held"] = result.get("held", [])
         return payload
 
     def ranges(self, body):

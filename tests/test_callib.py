@@ -465,6 +465,37 @@ class Tags(unittest.TestCase):
         self.assertEqual(again, [])
 
 
+    def test_similar(self):
+        for a, b in [("Daylight Saving Time Ends (fall back)", "🕚 Daylight Savings Time (fall back)"),
+                     ("🕚 Daylight Saving Time Begins (spring ahead)", "🕚 Spring ahead 1 Hr, DST begins"),
+                     ("Daylight Saving Time Ends (fall back)", "🕚 Fall back 1 Hr, DST ends"),
+                     ("🎂 Maria's 46th Birthday", "🎂 Maria's Birthday"),
+                     ("🎂 Sam's Birthday", "🎂 Sam's Birthday, dinner downtown")]:
+            self.assertTrue(c.similar(a, b), (a, b))
+        for a, b in [("🎂 Mike's Birthday", "🎂 Jaden's Birthday"),
+                     ("💐 Mother's Day", "👔 Father's Day"),
+                     ("🎄 Christmas", "Christmas party"),
+                     ("🎂 Riccardo Penco's Birthday", "🗳️ Election Day")]:
+            self.assertFalse(c.similar(a, b), (a, b))
+
+    def test_apply_holds_back_similar(self):
+        af = c.parse_annual("# Annual events\n\n11-1Sun Daylight Saving Time Ends (fall back)  \n"
+                            "11-1Sun 🎂 Jaden's Birthday  \n")
+        m = c.parse("2027.md", c.skeleton_text(2027))
+        day = D(2027, 11, 7)
+        m.days[day].events = [c.Event("🕚 Fall back 1 Hr, DST ends"), c.Event("🎂 Mike's Birthday")]
+        held = []
+        self.assertEqual(c.apply_annual(m, af, [], held), [(day, "🎂 Jaden's Birthday")])
+        self.assertEqual(held, [(day, "Daylight Saving Time Ends (fall back)", "🕚 Fall back 1 Hr, DST ends")])
+        again = []
+        self.assertEqual(c.apply_annual(m, af, [], again), [])
+        self.assertEqual(len(again), 1)
+        got = c.apply_annual(m, af, [], [], [(day, "Daylight Saving Time Ends (fall back)")])
+        self.assertEqual(got, [(day, "Daylight Saving Time Ends (fall back)")])
+        self.assertEqual([e.text for e in m.days[day].events][:2],
+                         ["Daylight Saving Time Ends (fall back)", "🎂 Jaden's Birthday"])
+
+
 class Ranges(unittest.TestCase):
     def model(self):
         return c.parse("2026.md", fixture("2026-before.md"))

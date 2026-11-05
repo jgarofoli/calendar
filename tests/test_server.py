@@ -264,6 +264,15 @@ class Write(Base):
                                                           "text": "🎂 Leap's Birthday", "group": "Birthdays"})
         self.assertEqual(st, 200, a)
         self.assertIn("01-01 🎂 Lena's Birthday  \n02-29 🎂 Leap's Birthday  \n", a["text"])
+        st, a = self.call("POST", "/api/annual/entries", {"base": a["base"], "date": "03-1Mon",
+                                                          "text": "🧾 Taxes", "group": "House",
+                                                          "details": ["#money", " ", "call Pat"]})
+        self.assertEqual(st, 200, a)
+        self.assertIn("## House\n\n03-1Mon 🧾 Taxes  \n           - #money  \n           - call Pat  \n",
+                      a["text"])
+        st, a = self.call("PUT", "/api/annual", {"base": a["base"], "text": a["text"].replace(
+            "03-1Mon 🧾 Taxes  \n           - #money  \n           - call Pat  \n", "")})
+        self.assertEqual(st, 200, a)
         _, p = self.call("POST", "/api/years/2026/annual", {"commit": False})
         self.assertEqual(len(p["added"]), 2)
         st, y = self.call("POST", "/api/years/2026/annual", {"commit": True, "base": p["base"]})

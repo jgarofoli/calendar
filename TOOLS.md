@@ -36,7 +36,7 @@ calfmt --check                 # lint; exit 1 on errors
 calfmt --diff 2026.md          # show what --write would change
 calfmt --write 2026.md         # format in place
 calfmt new 2028 --write        # a new year file with annual events
-calfmt annual --apply 2027     # preview missing annual events (add --write)
+calfmt annual --apply 2027     # preview missing annual events (add --write, --all)
 calfmt annual --bootstrap      # build annual.md from 🎂 events (add --write)
 ```
 
@@ -249,12 +249,24 @@ days that have passed, so the year file ends up a complete record (D4).
 - **Tags:** a copy that is already there but lacks some of its entry's tags
   gets them as one more tag-only detail. This is the only change applying
   makes to an existing event.
+- **Held back:** a missing event is not added when the day already has an
+  event that looks the same in other words. Two texts look the same when
+  they share at least two content words and more than half of the shorter
+  text's content words. Content words are lowercased, with stopwords
+  (`a`, `the`, `of`, ...), words containing digits, and a plural or
+  possessive `s` dropped. So `Daylight Saving Time Ends (fall back)` is held
+  back on a day that has `🕚 Fall back 1 Hr, DST ends`, but
+  `🎂 Jaden's Birthday` is added beside `🎂 Mike's Birthday`. Held-back
+  events are listed, and `--all` (in `calsd`, a checkbox per event) adds
+  them anyway. Only events the day had before applying are compared.
 - **Idempotent:** applying twice changes nothing the second time.
 
 Applying never deletes events and does not track edits. Removing an entry
 from `annual.md` leaves its copies alone. If a year file says
 `🎂 Sam's Birthday, dinner downtown` and you apply again, `🎂 Sam's Birthday`
-is added beside it. The diff preview shows this before anything is written.
+is held back beside it, since the two look the same. To make the year file
+use the `annual.md` wording, edit the day; the next apply then finds an
+exact copy. The diff preview shows all of this before anything is written.
 
 ### 6.4 Bootstrap
 

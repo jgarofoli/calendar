@@ -4,7 +4,7 @@
     calfmt --write [FILE...]      format in place
     calfmt --diff  [FILE...]      show what --write would change
     calfmt new YEAR [--write]     a new year file with annual events (6.2)
-    calfmt annual --apply YEAR [--write]   add missing annual events (6.3)
+    calfmt annual --apply YEAR [--write] [--all]   add missing annual events (6.3)
     calfmt annual --bootstrap [--write]    build annual.md from 🎂 events (6.4)
 
 With no FILE, every data file in the current directory is used:
@@ -116,8 +116,14 @@ def annual_main(args):
         for f in model.findings:
             print("%s:%s" % (path, f))
         sys.exit("calfmt: %s has unfixable errors" % path)
-    tagged = []
-    added = callib.apply_annual(model, af, tagged)
+    tagged, held = [], []
+    added = callib.apply_annual(model, af, tagged, held)
+    if args.all and held:
+        added += callib.apply_annual(model, af, tagged, [], [(d, t) for d, t, _ in held])
+    elif held:
+        for d, t, like in held:
+            print("%s: held back %s %s (looks like %s); --all adds it" % (path, d, t, like),
+                  file=sys.stderr)
     out = callib.rewrite_days(text, model, [d for d, _ in added + tagged])
     if args.write:
         write(path, out)
@@ -140,6 +146,8 @@ def main(argv=None):
         g = p.add_mutually_exclusive_group(required=True)
         g.add_argument("--apply", type=int, metavar="YEAR")
         g.add_argument("--bootstrap", action="store_true")
+        p.add_argument("--all", action="store_true",
+                       help="with --apply: also add events that look like one already on that day")
         p.add_argument("--write", action="store_true", help="change files (default: preview)")
         return annual_main(p.parse_args(argv[1:]))
     p = argparse.ArgumentParser(prog="calfmt", description=__doc__,

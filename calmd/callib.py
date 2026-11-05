@@ -959,16 +959,53 @@ def norm(text: str) -> str:
     return t
 
 
+STOPWORDS = {"a", "an", "and", "at", "for", "in", "of", "on", "the", "to", "with"}
+
+
+def words(text: str) -> set:
+    """Content words for `similar`: lowercase, no counters, no plural or possessive s."""
+    out = set()
+    for w in re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?|\S*\d\S*", norm(text).lower()):
+        if any(ch.isdigit() for ch in w) or w in STOPWORDS:
+            continue
+        w = w[:-2] if w.endswith("'s") else w
+        if len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
+            w = w[:-1]
+        if len(w) > 1:
+            out.add(w)
+    return out
+
+
+def similar(a: str, b: str) -> bool:
+    """Whether two event texts look like the same event worded differently (6.3).
+
+    True when they share at least two content words and more than half of the
+    shorter one's words. "Daylight Saving Time Ends (fall back)" is similar to
+    "🕚 Fall back 1 Hr, DST ends"; "🎂 Mike's Birthday" is not similar to
+    "🎂 Jaden's Birthday".
+    """
+    wa, wb = words(a), words(b)
+    shared = len(wa & wb)
+    return shared >= 2 and shared * 2 > min(len(wa), len(wb))
+
+
 def apply_annual(model: YearFile, af: AnnualFile,
-                 tagged: Optional[list] = None) -> List[Tuple[datetime.date, str]]:
+                 tagged: Optional[list] = None, held: Optional[list] = None,
+                 include=()) -> List[Tuple[datetime.date, str]]:
     """Adds missing annual events to `model` in place (TOOLS.md 6.3).
 
     Returns the (date, text) pairs that were added. A copy that is already
     there but lacks some of its entry's tags gets them as one more tag-only
     detail; those (date, text) pairs are appended to `tagged`.
+
+    An event that is missing but `similar` to an event the day already had is
+    held back: (date, text, existing text) goes to `held` and nothing is
+    added, unless (date, text) is in `include`.
     """
     added = []
+    include = set(include)
     pos: Dict[datetime.date, int] = {}
+    before = {d: [e.text for e in day.events] for d, day in model.days.items()}
     for date, ev in annual_events(af, model.year):
         day = model.days.get(date)
         if day is None:
@@ -985,6 +1022,11 @@ def apply_annual(model: YearFile, af: AnnualFile,
                 copy.details.append(Detail(" ".join("#" + t for t in missing)))
                 if tagged is not None:
                     tagged.append((date, copy.text))
+            continue
+        like = next((t for t in before[date] if similar(ev.text, t)), None)
+        if like is not None and (date, ev.text) not in include:
+            if held is not None:
+                held.append((date, ev.text, like))
             continue
         day.events.insert(p, ev)
         pos[date] = p + 1

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "calmd"
-version = "1.4.0"
+version = "1.5.0"
 description = "Lint, format, and edit plain-text calendar files (SPEC.md)"
 readme = "README.md"
 requires-python = ">=3.8"

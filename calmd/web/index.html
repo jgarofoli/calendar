@@ -99,6 +99,8 @@
   pre.diff .add { color: var(--good); } pre.diff .del { color: var(--bad); } pre.diff .hunk { color: var(--muted); }
   .msg { color: var(--bad); margin: .5rem 0; white-space: pre-wrap; }
   .hint { color: var(--muted); font-size: .85rem; }
+  #heldList label { display: block; margin: .2rem 0; }
+  #heldList .like { color: var(--muted); }
   .findings { margin: 0; padding-left: 1.2rem; }
   .findings li { margin: .25rem 0; }
   .findings .error { color: var(--bad); } .findings .warning { color: var(--warn); }
@@ -173,6 +175,8 @@
 <dialog id="diffDlg">
   <h3 id="diffTitle"></h3>
   <div id="diffMsg" class="msg hidden"></div>
+  <div id="heldBox" class="hidden"><p class="hint">Held back because the day already has an event that
+    looks the same. Tick one to add it anyway:</p><div id="heldList"></div></div>
   <pre class="diff" id="diffText"></pre>
   <div class="actions"><button data-close>Cancel</button><button id="diffGo" class="primary">Commit</button></div>
 </dialog>
@@ -202,6 +206,7 @@
   <div class="form">
     <label for="aDate">Date</label><input id="aDate" type="text" placeholder="MM-DD, 11-4Thu, Easter" style="width:12rem">
     <label for="aText">Event</label><input id="aText" type="text" placeholder="🎂 Sam's {nth:1990} Birthday">
+    <label for="aDet">Details</label><textarea id="aDet" rows="3" placeholder="One per line, e.g. #birthdays"></textarea>
     <label for="aGroup">Group</label><input id="aGroup" type="text" list="aGroups" placeholder="Birthdays">
   </div>
   <datalist id="aGroups"></datalist>
@@ -735,6 +740,7 @@ function showDiff(title, diff, go, goLabel) {
     s.textContent = line + "\n"; pre.append(s);
   }
   showMsg($("diffMsg"), "");
+  $("heldBox").classList.add("hidden");
   $("diffGo").textContent = goLabel || "Commit";
   $("diffGo").classList.toggle("hidden", !diff);
   $("diffGo").onclick = async () => {
@@ -756,32 +762,45 @@ async function formatFile() {
   } catch (err) { toast(err.message); }
 }
 
-async function applyAnnual(year) {
-  try {
-    const j = await api("POST", "/api/years/" + year + "/annual", {commit: false});
-    showDiff("Annual events → " + year + ".md (" + j.added.length + " to add)", j.diff, async () => {
-      const r = await api("POST", "/api/years/" + year + "/annual", {commit: true, base: j.base});
-      if (r.year === data.year) setData(r);
-      toast("Added " + r.added.length + " annual events to " + year);
-    }, "Add " + j.added.length);
-  } catch (err) { toast(err.message); }
-}
-
-async function applyAll() {
-  let diff = "", bases = {}, total = 0;
-  for (const y of years) {
-    const j = await api("POST", "/api/years/" + y + "/annual", {commit: false});
+// Preview applying annual.md to `ys`; events similar to one already on the
+// day are held back (TOOLS.md 6.3) and listed with "add anyway" checkboxes.
+async function applyAnnualTo(ys, label, include) {
+  include = include || [];
+  let diff = "", bases = {}, total = 0, held = [];
+  for (const y of ys) {
+    const j = await api("POST", "/api/years/" + y + "/annual", {commit: false, include});
     diff += j.diff; bases[y] = j.base; total += j.added.length;
+    held = held.concat(j.held);
   }
-  showDiff("Annual events → all years (" + total + " to add)", diff, async () => {
-    for (const y of years) {
+  showDiff("Annual events → " + label + " (" + total + " to add)", diff, async () => {
+    for (const y of ys) {
       if (!bases[y]) continue;
-      const r = await api("POST", "/api/years/" + y + "/annual", {commit: true, base: bases[y]});
+      const r = await api("POST", "/api/years/" + y + "/annual", {commit: true, base: bases[y], include});
       if (r.year === data.year) setData(r);
     }
     toast("Added " + total + " annual events");
   }, "Add " + total);
+  const shown = held.concat(include.map(x => Object.assign({checked: true}, x)));
+  if (!shown.length) return;
+  const list = $("heldList"); list.replaceChildren();
+  shown.sort((p, q) => p.date < q.date ? -1 : p.date > q.date ? 1 : 0);
+  for (const h of shown) {
+    const l = document.createElement("label"), cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = !!h.checked;
+    const like = document.createElement("span"); like.className = "like";
+    like.textContent = h.like ? " — looks like “" + h.like + "”" : "";
+    l.append(cb, " " + h.date + " " + h.text, like);
+    cb.onchange = () => {
+      const inc = include.filter(x => !(x.date === h.date && x.text === h.text));
+      if (cb.checked) inc.push({date: h.date, text: h.text, like: h.like});
+      applyAnnualTo(ys, label, inc).catch(err => toast(err.message));
+    };
+    list.append(l);
+  }
+  $("heldBox").classList.remove("hidden");
 }
+function applyAnnual(year) { applyAnnualTo([year], year + ".md").catch(err => toast(err.message)); }
+function applyAll() { return applyAnnualTo(years, "all years"); }
 
 let annual = null;
 async function openAnnual() {
@@ -796,8 +815,9 @@ async function openAnnual() {
 $("aAdd").onclick = async () => {
   try {
     annual = await api("POST", "/api/annual/entries", {base: annual.base, date: $("aDate").value.trim(),
-      text: $("aText").value, group: $("aGroup").value.trim()});
-    $("aText2").value = annual.text; $("aText").value = ""; $("aDate").value = "";
+      text: $("aText").value, group: $("aGroup").value.trim(),
+      details: $("aDet").value.split("\n").map(t => t.trim()).filter(Boolean)});
+    $("aText2").value = annual.text; $("aText").value = ""; $("aDate").value = ""; $("aDet").value = "";
     showMsg($("annualMsg"), ""); toast("Entry added");
     if ($("aApply").checked) { $("annualDlg").close(); await applyAll(); }
   } catch (err) { showMsg($("annualMsg"), err.message + (err.body && err.body.findings ?
